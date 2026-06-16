@@ -1,5 +1,5 @@
 /****************************************************
- CARLISLE E.O.M STOCK SYSTEM - V16 OWNER + SYSTEM PROTECTIONS FIXED
+ CARLISLE E.O.M STOCK SYSTEM - V16 DECOUPLED ARCHITECTURE
  - No hard-coded staff emails.
  - SYSTEM_ACCESS is the source of users and sheet permissions.
  - Protections and permission-sync are separated to avoid timeouts.
@@ -9,6 +9,7 @@ const CONFIG = {
   SYSTEM_ACCESS_SHEET: 'SYSTEM_ACCESS',
   LOG_SHEET: 'SYSTEM_LOGS',
   EDIT_LOG_SHEET: 'EOM EDIT LOG',
+  STOCK_CHANGE_LOG: 'STOCK CHANGE LOG',
   MASTER_PRICE_LIST: 'MASTER_PRICELIST',
 
   SYSTEM_ACCESS_HEADERS: ['Email', 'Full Name', 'Role', 'Active', 'Notes', 'Sheets Controlled'],
@@ -25,7 +26,7 @@ const CONFIG = {
   SHEET_CONTROL_OPTIONS: [
     'ALL','OWNER SHEETS','ADMIN SHEETS','SYSTEM SHEETS','LOG SHEETS','REPORT SHEETS','REPORTS','CS SHEETS','ALL CS SHEETS','WEEKLY M.R SHEETS',
     'WEEKLY M.R WEEK 1-2','WEEKLY M.R WEEK 3-4','WEEKLY M.R WEEK 5',
-    'PURCHASES','DAILY SALES','DAILY SALES BREAKDOWN','DAILY SALES','EXPENSES','STOCK MOVEMENT APPROVAL LOG',
+    'PURCHASES','DAILY SALES','DAILY SALES BREAKDOWN','EXPENSES','STOCK MOVEMENT APPROVAL LOG',
     'CS MINI-MART','CS BAR','CS RESTAURANT','CS LAUNDRY','CS STORE','CS KITCHEN',
     'M.R MINI-MART 1-5','M.R BUSH BAR 1-5','M.R KITCHEN 1-5',
     'M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','M.R KITCHEN U',
@@ -82,54 +83,28 @@ const CONFIG = {
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('Carlisle EOM')
-    .addSubMenu(ui.createMenu('Access Control')
-      .addItem('Rebuild SYSTEM_ACCESS', 'rebuildSystemAccess')
-      .addItem('Setup SYSTEM_ACCESS Dropdowns', 'setupSystemAccessDropdowns')
-      .addItem('Validate SYSTEM_ACCESS', 'validateSystemAccess')
-      .addSeparator()
-      .addItem('Sync User Permissions - ALL', 'syncUserPermissions_All')
-      .addItem('Sync User Permissions - Purchases', 'syncUserPermissions_Purchases')
-      .addItem('Sync User Permissions - CS Sheets', 'syncUserPermissions_CSSheets')
-      .addItem('Sync User Permissions - Weekly M.R Sheets', 'syncUserPermissions_WeeklyMR')
-      .addSeparator()
-      .addItem('Sync Permissions - Week 1 Only', 'syncUserPermissions_Weekly_Week1')
-      .addItem('Sync Permissions - Week 2 Only', 'syncUserPermissions_Weekly_Week2')
-      .addItem('Sync Permissions - Week 3 Only', 'syncUserPermissions_Weekly_Week3')
-      .addItem('Sync Permissions - Week 4 Only', 'syncUserPermissions_Weekly_Week4')
-      .addItem('Sync Permissions - Week 5 Only', 'syncUserPermissions_Weekly_Week5')
-      .addItem('Sync Permissions - ACTIVE Sheet Only', 'syncUserPermissions_ActiveSheetOnly'))
-    .addSubMenu(ui.createMenu('Protections Only')
+    .addSubMenu(ui.createMenu('Menu 1: Protections')
       .addItem('Protect Purchases', 'protect_Purchases')
       .addItem('Protect Daily Sales', 'protect_DailySales')
       .addItem('Protect Daily Sales Breakdown', 'protect_DailySalesBreakdown')
       .addItem('Protect Expenses', 'protect_Expenses')
-      .addItem('Protect Stock Movement Approval Log', 'protect_StockMovement')
-      .addItem('Protect CS Sheets', 'protect_CSSheets')
-      .addSeparator()
-      .addItem('Protect Weekly - Next Sheet', 'protect_Weekly_NextSheet')
-      .addItem('Reset Weekly Protection Queue', 'resetWeeklyProtectionQueue')
-      .addSeparator()
-      .addItem('Protect Weekly - Week 1 Only', 'protect_Weekly_Week1')
-      .addItem('Protect Weekly - Week 2 Only', 'protect_Weekly_Week2')
-      .addItem('Protect Weekly - Week 3 Only', 'protect_Weekly_Week3')
-      .addItem('Protect Weekly - Week 4 Only', 'protect_Weekly_Week4')
-      .addItem('Protect Weekly - Week 5 Only', 'protect_Weekly_Week5')
-      .addSeparator()
-      .addItem('Protect Weekly - Mini-Mart Only', 'protect_Weekly_MiniMart')
-      .addItem('Protect Weekly - Bush Bar Only', 'protect_Weekly_BushBar')
-      .addItem('Protect Weekly - Kitchen Only', 'protect_Weekly_Kitchen')
+      .addItem('Protect Weekly M.R Sheets', 'protect_Weekly_NextSheet')
       .addItem('Protect M.R Kitchen U', 'protect_MRKitchenU')
+      .addItem('Protect CS Sheets', 'protect_CSSheets')
+      .addItem('Protect Admin Sheets', 'protect_AdminSheets_Next')
       .addSeparator()
-      .addItem('Protect ACTIVE Sheet Only', 'protect_ActiveSheetOnly')
-      .addItem('Protect Owner/Admin Sheets - Next Sheet', 'protect_AdminSheets_Next')
-      .addItem('Reset Owner/Admin Protection Queue', 'resetAdminProtectionQueue')
-      .addItem('Protect System Sheets', 'protect_SystemSheets')
-      .addItem('Protect Log Sheets', 'protect_LogSheets')
-      .addItem('Protect Report Sheets', 'protect_ReportSheets')
-      .addItem('Protect Master Pricelist', 'protect_MasterPriceList')
+      .addItem('Clear All Protections', 'clearCarlisleProtections')
       .addSeparator()
-      .addItem('Clear Protections - ALL', 'clearCarlisleProtections'))
-    .addSubMenu(ui.createMenu('Reports')
+      .addItem('Reset Weekly Protection Queue', 'resetWeeklyProtectionQueue')
+      .addItem('Reset Admin Protection Queue', 'resetAdminProtectionQueue'))
+    .addSubMenu(ui.createMenu('Menu 2: Access Control')
+      .addItem('Rebuild SYSTEM_ACCESS', 'rebuildSystemAccess')
+      .addItem('Setup SYSTEM_ACCESS Dropdowns', 'setupSystemAccessDropdowns')
+      .addItem('Validate SYSTEM_ACCESS', 'validateSystemAccess')
+      .addItem('Sync User Permissions', 'syncUserPermissions_All')
+      .addSeparator()
+      .addItem('Sync Permissions - ACTIVE Sheet Only', 'syncUserPermissions_ActiveSheetOnly'))
+    .addSubMenu(ui.createMenu('Carlisle Reports')
       .addItem('Generate Damage Report', 'generateDamageReport')
       .addItem('Generate Issued Stock Report', 'generateIssuedStockReport')
       .addItem('Generate Staff Liability Report', 'generateStaffLiabilityReport')

@@ -9,6 +9,7 @@ function onEdit(e) {
     auditEdit_(e);
     handleApprovalEdit_(e);
     handleMasterPriceCostUpdate_(e);
+    logStockChange_(e);
   } catch (err) {
     log_('ON_EDIT_ERROR', err.message || err);
   }
@@ -21,6 +22,21 @@ function auditEdit_(e) {
     if (!sh) return;
     if (sh.getLastRow() === 0) sh.appendRow(['Timestamp','User','Sheet','Cell','Old Value','New Value']);
     sh.appendRow([new Date(), Session.getActiveUser().getEmail(), e.range.getSheet().getName(), e.range.getA1Notation(), e.oldValue || '', e.value || '']);
+  } catch (err) {}
+}
+
+function logStockChange_(e) {
+  try {
+    const sh = e.range.getSheet();
+    const name = sh.getName();
+    // Only log significant stock-related changes
+    if (!isCSSheet_(name) && !isWeeklyMRSheet_(name) && name !== 'PURCHASES' && name !== 'STOCK MOVEMENT APPROVAL LOG') return;
+
+    const ss = SpreadsheetApp.getActive();
+    let logSh = ss.getSheetByName(CONFIG.STOCK_CHANGE_LOG);
+    if (!logSh) return;
+    if (logSh.getLastRow() === 0) logSh.appendRow(['Timestamp','User','Sheet','Cell','Change']);
+    logSh.appendRow([new Date(), Session.getActiveUser().getEmail(), name, e.range.getA1Notation(), (e.oldValue || 'BLANK') + ' -> ' + (e.value || 'BLANK')]);
   } catch (err) {}
 }
 
@@ -39,16 +55,33 @@ function findHeaderCol_(sheet, names, headerRows) {
   return null;
 }
 
+function isOwner_(email) {
+  const records = getAccessRecords_();
+  const user = records.find(r => r.email.toLowerCase() === email.toLowerCase());
+  if (!user) return false;
+  return CONFIG.OWNER_ROLES.includes(user.role) || user.sheets.includes('ALL') || user.sheets.includes('OWNER SHEETS');
+}
+
 function handleApprovalEdit_(e) {
   const sh = e.range.getSheet();
   if (sh.getName() !== 'STOCK MOVEMENT APPROVAL LOG') return;
   const statusCell = findHeaderCol_(sh, ['STATUS'], 10);
   if (!statusCell || e.range.getColumn() !== statusCell.col || e.range.getRow() <= statusCell.row) return;
+
+  const userEmail = Session.getActiveUser().getEmail();
   const status = key_(e.value);
   if (!['APPROVED','REJECTED','UNDER REVIEW','PENDING'].includes(status)) return;
+
+  // Owner-only approval enforcement
+  if (!isOwner_(userEmail)) {
+    e.range.setValue(e.oldValue || '');
+    uiAlert_('Access Denied: Only Owners or MDs can approve or reject stock movements.');
+    return;
+  }
+
   const approvedBy = findHeaderCol_(sh, ['APPROVED BY','APPROVER'], 10);
   const approvedDate = findHeaderCol_(sh, ['APPROVAL DATE','APPROVED DATE'], 10);
-  if (approvedBy) sh.getRange(e.range.getRow(), approvedBy.col).setValue(Session.getActiveUser().getEmail());
+  if (approvedBy) sh.getRange(e.range.getRow(), approvedBy.col).setValue(userEmail);
   if (approvedDate) sh.getRange(e.range.getRow(), approvedDate.col).setValue(new Date());
 }
 

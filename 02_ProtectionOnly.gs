@@ -5,6 +5,7 @@
  - Reuses existing Carlisle protection instead of deleting/recreating.
  - Weekly can be run one sheet at a time to avoid timeout.
  - Does not write into merged cells.
+ - EXCLUDES formula cells from cashier editable ranges.
 ****************************************************/
 
 function protectionGroups_() {
@@ -52,7 +53,44 @@ function safeRangeRC_(sheet, row, col, rows, cols) {
   } catch (e) { return null; }
 }
 
-function addRange_(arr, range) { if (range) arr.push(range); }
+/**
+ * Prunes cells containing formulas from the range.
+ * Returns an array of sub-ranges that do NOT contain formulas.
+ */
+function pruneFormulas_(range) {
+  if (!range) return [];
+  const sheet = range.getSheet();
+  const formulas = range.getFormulas();
+  const startRow = range.getRow();
+  const startCol = range.getColumn();
+  const numRows = formulas.length;
+  const numCols = formulas[0].length;
+
+  const unprotected = [];
+  for (let c = 0; c < numCols; c++) {
+    let start = -1;
+    for (let r = 0; r < numRows; r++) {
+      if (!formulas[r][c]) {
+        if (start === -1) start = r;
+      } else {
+        if (start !== -1) {
+          unprotected.push(sheet.getRange(startRow + start, startCol + c, r - start, 1));
+          start = -1;
+        }
+      }
+    }
+    if (start !== -1) {
+      unprotected.push(sheet.getRange(startRow + start, startCol + c, numRows - start, 1));
+    }
+  }
+  return unprotected;
+}
+
+function addRange_(arr, range) {
+  if (!range) return;
+  const pruned = pruneFormulas_(range);
+  pruned.forEach(r => arr.push(r));
+}
 
 function lastMeaningfulRow_(sheet, startRow, keyCol) {
   const max = sheet.getMaxRows();
@@ -87,7 +125,8 @@ function editableRangesForSheet_(sheet) {
     addRange_(ranges, safeRangeA1_(sheet, 'K:K'));
   } else if (name === 'DAILY SALES') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
-    addRange_(ranges, safeRangeA1_(sheet, 'O5:O35'));
+    addRange_(ranges, safeRangeA1_(sheet, 'A5:O35'));
+    addRange_(ranges, safeRangeA1_(sheet, 'A38:O'));
   } else if (name === 'EXPENSES') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
     addRange_(ranges, safeRangeA1_(sheet, 'A5:I502'));
@@ -106,10 +145,19 @@ function editableRangesForSheet_(sheet) {
       addRange_(ranges, safeRangeRC_(sheet, 7, 5, maxRows - 6, 5)); // E7:I
     }
   } else if (isWeeklyMRSheet_(name)) {
+    // Name fields
     ['D2:H2','J2:N2','P2:T2','V2:Z2','AB2:AF2','AH2:AL2','AN2:AR2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
+
+    const last = lastMeaningfulRow_(sheet, 8, 2);
+    const numRows = Math.max(last - 7, 1);
+
+    // Cashier edits only sales columns: F, L, R, X, AD, AJ, AP
+    [6, 12, 18, 24, 30, 36, 42].forEach(col => {
+      addRange_(ranges, safeRangeRC_(sheet, 8, col, numRows, 1));
+    });
+
     if (isWeekOneSheet_(name)) {
-      const last = lastMeaningfulRow_(sheet, 8, 2);
-      addRange_(ranges, safeRangeRC_(sheet, 8, 4, last - 7, 1)); // D8:D
+      addRange_(ranges, safeRangeRC_(sheet, 8, 4, numRows, 1)); // D8:D (Opening Stock)
     }
   } else if (name === 'M.R KITCHEN U') {
     ['A3:B3','D2:F2','J2:L2','P2:R2','V2:X2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
@@ -118,8 +166,9 @@ function editableRangesForSheet_(sheet) {
   } else if (isCSSheet_(name)) {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
     const last = lastMeaningfulRow_(sheet, 5, 2);
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, Math.max(last - 4, 1), 1));  // E5:E (Opening Stock)
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, Math.max(last - 4, 1), 1)); // AE5:AE (Physical Count)
+    const numRows = Math.max(last - 4, 1);
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, numRows, 1));  // E5:E (Opening Stock)
+    addRange_(ranges, safeRangeRC_(sheet, 5, 31, numRows, 1)); // AE5:AE (Physical Count)
   }
   return ranges;
 }
