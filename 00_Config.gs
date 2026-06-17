@@ -60,22 +60,13 @@ const CONFIG = {
     'MASTER_PRICELIST': ['MASTER_PRICELIST'],
     'CS SHEETS': ['CS MINI-MART','CS LAUNDRY','CS BAR','CS RESTAURANT','CS STORE','CS KITCHEN'],
     'ALL CS SHEETS': ['CS MINI-MART','CS LAUNDRY','CS BAR','CS RESTAURANT','CS STORE','CS KITCHEN'],
-    'CS MINI-MART': ['CS MINI-MART'],
-    'CS LAUNDRY': ['CS LAUNDRY'],
-    'CS BAR': ['CS BAR'],
-    'CS RESTAURANT': ['CS RESTAURANT'],
-    'CS STORE': ['CS STORE'],
-    'CS KITCHEN': ['CS KITCHEN'],
     'WEEKLY M.R SHEETS': ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','2 M.R MINI-MART','3 M.R MINI-MART','4 M.R MINI-MART','5 M.R MINI-MART','2 M.R BUSH BAR','3 M.R BUSH BAR','4 M.R BUSH BAR','5 M.R BUSH BAR','2 M.R KITCHEN','3 M.R KITCHEN','4 M.R KITCHEN','5 M.R KITCHEN'],
     'WEEKLY M.R WEEK 1-2': ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','2 M.R MINI-MART','2 M.R BUSH BAR','2 M.R KITCHEN'],
     'WEEKLY M.R WEEK 3-4': ['3 M.R MINI-MART','3 M.R BUSH BAR','3 M.R KITCHEN','4 M.R MINI-MART','4 M.R BUSH BAR','4 M.R KITCHEN'],
     'WEEKLY M.R WEEK 5': ['5 M.R MINI-MART','5 M.R BUSH BAR','5 M.R KITCHEN'],
     'M.R MINI-MART 1-5': ['M.R MINI-MART','2 M.R MINI-MART','3 M.R MINI-MART','4 M.R MINI-MART','5 M.R MINI-MART'],
     'M.R BUSH BAR 1-5': ['M.R BUSH BAR','2 M.R BUSH BAR','3 M.R BUSH BAR','4 M.R BUSH BAR','5 M.R BUSH BAR'],
-    'M.R KITCHEN 1-5': ['M.R KITCHEN','2 M.R KITCHEN','3 M.R KITCHEN','4 M.R KITCHEN','5 M.R KITCHEN'],
-    'M.R MINI-MART': ['M.R MINI-MART','2 M.R MINI-MART','3 M.R MINI-MART','4 M.R MINI-MART','5 M.R MINI-MART'],
-    'M.R BUSH BAR': ['M.R BUSH BAR','2 M.R BUSH BAR','3 M.R BUSH BAR','4 M.R BUSH BAR','5 M.R BUSH BAR'],
-    'M.R KITCHEN': ['M.R KITCHEN','2 M.R KITCHEN','3 M.R KITCHEN','4 M.R KITCHEN','5 M.R KITCHEN']
+    'M.R KITCHEN 1-5': ['M.R KITCHEN','2 M.R KITCHEN','3 M.R KITCHEN','4 M.R KITCHEN','5 M.R KITCHEN']
   }
 };
 
@@ -115,7 +106,9 @@ function onOpen() {
       .addItem('Generate Utilized Report', 'generateUtilizedReport')
       .addItem('Generate Staff Liability Report', 'generateStaffLiabilityReport')
       .addItem('Generate Stock Audit Summary', 'generateStockAuditSummary')
-      .addItem('Check Formula Errors', 'checkFormulaErrors'))
+      .addItem('Check Formula Errors', 'checkFormulaErrors')
+      .addSeparator()
+      .addItem('Clear All Reports', 'clearAllReports'))
     .addSubMenu(ui.createMenu('Utilities')
       .addItem('Refresh Approval Timestamps', 'refreshApprovalTimestamps')
       .addItem('Run Master Price Cost Sync', 'syncMasterPriceCostsFromApprovedMovements')

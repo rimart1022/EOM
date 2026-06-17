@@ -137,18 +137,23 @@ function editableRangesForSheet_(sheet) {
 
   // Core Transaction Sheets
   if (name === 'PURCHASES') {
+    addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
     addRange_(ranges, safeRangeRC_(sheet, 5, 1, row1004 - 4, 3)); // A5:C1004
     addRange_(ranges, safeRangeRC_(sheet, 5, 5, row1004 - 4, 5)); // E5:I1004
     addRange_(ranges, safeRangeRC_(sheet, 5, 11, row1004 - 4, 1)); // K5:K1004
   } else if (name === 'EXPENSES') {
-    addRange_(ranges, safeRangeRC_(sheet, 5, 1, row1004 - 4, 9)); // A5:I1004
-    addRange_(ranges, safeRangeRC_(sheet, 5, 11, row1004 - 4, 1)); // K5:K1004
+    addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 1, 502 - 4, 9)); // A5:I502
+    addRange_(ranges, safeRangeRC_(sheet, 5, 11, 502 - 4, 1)); // K5:K502
   } else if (name === 'STOCK MOVEMENT APPROVAL LOG') {
-    addRange_(ranges, safeRangeRC_(sheet, 6, 1, row1004 - 5, 3)); // A6:C1004
-    addRange_(ranges, safeRangeRC_(sheet, 6, 5, row1004 - 5, 5)); // E6:I1004
+    addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
+    addRange_(ranges, safeRangeRC_(sheet, 7, 1, row1004 - 6, 3)); // A7:C1004
+    addRange_(ranges, safeRangeRC_(sheet, 7, 5, row1004 - 6, 5)); // E7:I1004
   } else if (name === 'DAILY SALES') {
+    addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
     addRange_(ranges, safeRangeA1_(sheet, 'O5:O35'));
   } else if (name === 'DAILY SALES BREAKDOWN') {
+    addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
     addRange_(ranges, safeRangeRC_(sheet, 5, 1, row1004 - 4, 8));   // A5:H1004
     addRange_(ranges, safeRangeRC_(sheet, 5, 10, row1004 - 4, 3));  // J5:L1004
     addRange_(ranges, safeRangeRC_(sheet, 5, 14, Math.min(maxRows, 10004) - 4, 1)); // N5:N10004
@@ -158,20 +163,17 @@ function editableRangesForSheet_(sheet) {
   } else if (name === 'CS STORE') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
     const nr = Math.min(311, maxRows) - 4;
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));   // E5:F
-    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));  // O5:O
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));  // AE5:AE
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));   // E5:F (Opening Stock)
+    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));  // AE5:AE (Physical Count)
   } else if (name === 'CS MINI-MART') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
     const nr = Math.min(100, maxRows) - 4;
     addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
     addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
   } else if (name === 'CS RESTAURANT') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
     const nr = Math.min(94, maxRows) - 4;
     addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
     addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
   } else if (name === 'CS LAUNDRY') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
@@ -182,13 +184,11 @@ function editableRangesForSheet_(sheet) {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
     const nr = Math.min(74, maxRows) - 4;
     addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
     addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
   } else if (name === 'CS KITCHEN') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
     const nr = Math.min(50, maxRows) - 4;
     addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
     addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
 
   // Weekly M.R Sheets
@@ -283,7 +283,7 @@ function resetAdminProtectionQueue() { PropertiesService.getDocumentProperties()
 function protect_CSSheets_Next() { runQueueProtection_('CS_PROTECT_INDEX', 'CS_SHEETS', 'CS Sheets'); }
 function resetCSSheetsProtectionQueue() { PropertiesService.getDocumentProperties().deleteProperty('CS_PROTECT_INDEX'); uiAlert_('CS Sheets queue reset.'); }
 
-function protect_CSSheets(){ protectSheetsFast_(protectionGroups_().CS_SHEETS, 'CS Sheets'); }
+function protect_CSSheets(){ protect_CSSheets_Next(); }
 
 function weeklyGroupsV13_() {
   return {

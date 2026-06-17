@@ -39,8 +39,8 @@ function movementReport_(movementTypes, targetSheet) {
   const outHeaders = ['Report Date','Source Row'].concat(headers);
   const out = [];
   rows.forEach((r, i) => {
-    const type = cType >= 0 ? key_(r[cType]) : '';
-    const status = cStatus >= 0 ? key_(r[cStatus]) : '';
+    const type = cType >= 0 ? key_(String(r[cType])) : '';
+    const status = cStatus >= 0 ? key_(String(r[cStatus])) : '';
     if (movementTypes.includes(type) && status !== 'REJECTED') out.push([new Date(), i + 6].concat(r));
   });
   const sh = ensureReportSheet_(targetSheet, outHeaders);
@@ -79,24 +79,58 @@ function clearAllReports() {
 function generateStockAuditSummary() {
   const ss = SpreadsheetApp.getActive();
   const csNames = ['CS STORE','CS MINI-MART','CS LAUNDRY','CS BAR','CS RESTAURANT','CS KITCHEN'];
-  const sh = ensureReportSheet_('STOCK AUDIT SUMMARY', ['Timestamp','Sheet','Item Code','Item','Opening','Added','Issued','Sold','Damaged','Physical Count','Closing Stock','Variance']);
+  const shHeaders = ['Timestamp','Sheet','Item Code','Item','Opening','Added','Issued','Sold','Damaged','Physical Count','Closing Stock','Variance'];
+  const sh = ensureReportSheet_('STOCK AUDIT SUMMARY', shHeaders);
   const out = [];
+
   csNames.forEach(name => {
     const s = ss.getSheetByName(name);
     if (!s) return;
     const last = s.getLastRow();
     if (last < 5) return;
-    const values = s.getRange(1, 1, last, s.getLastColumn()).getValues();
-    for (let r = 4; r < values.length; r++) {
-      const row = values[r];
-      if (!row[0] && !row[1]) continue;
-      const itemCode = row[0] || row[1] || '';
-      const item = row[1] || row[2] || '';
-      const nums = row.filter(v => typeof v === 'number');
-      if (nums.length) out.push([new Date(), name, itemCode, item].concat(nums.slice(0, 8)));
+    const data = s.getRange(1, 1, last, Math.min(s.getLastColumn(), 50)).getValues();
+    const h = data[3]; // Row 4 headers
+    const cIdx = {
+      code: colIndex_(h, ['ITEM CODE','CODE']),
+      name: colIndex_(h, ['ITEM NAME','ITEM','PARTICULARS']),
+      open: colIndex_(h, ['OPENING STOCK','OPENING']),
+      add: colIndex_(h, ['ADDED STOCK','ADDED']),
+      iss: colIndex_(h, ['ISSUED STOCK','ISSUED']),
+      sold: colIndex_(h, ['SOLD','SALES']),
+      dmg: colIndex_(h, ['DAMAGED','DAMAGE']),
+      phys: colIndex_(h, ['PHYSICAL COUNT','PHYSICAL']),
+      close: colIndex_(h, ['CLOSING STOCK','CLOSING']),
+      var: colIndex_(h, ['VARIANCE','VAR'])
+    };
+
+    for (let r = 4; r < data.length; r++) {
+      const row = data[r];
+      const itemCode = cIdx.code >= 0 ? row[cIdx.code] : '';
+      const itemName = cIdx.name >= 0 ? row[cIdx.name] : '';
+      if (!itemCode && !itemName) continue;
+
+      const getVal = (idx) => (idx >= 0 && typeof row[idx] === 'number') ? row[idx] : 0;
+
+      out.push([
+        new Date(),
+        name,
+        itemCode,
+        itemName,
+        getVal(cIdx.open),
+        getVal(cIdx.add),
+        getVal(cIdx.iss),
+        getVal(cIdx.sold),
+        getVal(cIdx.dmg),
+        getVal(cIdx.phys),
+        getVal(cIdx.close),
+        getVal(cIdx.var)
+      ]);
     }
   });
-  if (out.length) sh.getRange(2, 1, out.length, Math.min(out[0].length, 12)).setValues(out.map(r => r.slice(0, 12)));
+
+  if (out.length) {
+    sh.getRange(2, 1, out.length, shHeaders.length).setValues(out);
+  }
   uiAlert_('Stock Audit Summary generated. Rows: ' + out.length);
 }
 
@@ -113,7 +147,9 @@ function checkFormulaErrors() {
     formulas.forEach((row, r) => row.forEach((f, c) => {
       if (!f) return;
       const d = displays[r][c];
-      if (errors.some(err => String(d).includes(err)) || errors.some(err => String(f).includes(err))) {
+      const dStr = String(d);
+      const fStr = String(f);
+      if (errors.some(err => dStr.includes(err)) || errors.some(err => fStr.includes(err))) {
         out.push([new Date(), s.getName(), s.getRange(r + 1, c + 1).getA1Notation(), f, d]);
       }
     }));
