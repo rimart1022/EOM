@@ -1,10 +1,8 @@
 /****************************************************
  V16 FAST PROTECTION FUNCTIONS ONLY
- - Protections do NOT sync staff permissions.
+ - Structural Protections: Defines WHAT is editable.
+ - Access Control: SYSTEM_ACCESS defines WHO can open the file.
  - Use one sheet protection per sheet.
- - Reuses existing Carlisle protection instead of deleting/recreating.
- - Large groups can be run one sheet at a time to avoid timeout.
- - Does not write into merged cells.
  - EXCLUDES formula cells from cashier editable ranges.
 ****************************************************/
 
@@ -32,6 +30,11 @@ function protectionLock_(callback) {
   try { return callback(); } finally { lock.releaseLock(); }
 }
 
+function existingSheets_(names) {
+  const ss = SpreadsheetApp.getActive();
+  return names.map(n => ss.getSheetByName(n)).filter(Boolean);
+}
+
 function safeRangeA1_(sheet, a1) {
   try {
     const r = sheet.getRange(a1);
@@ -53,10 +56,6 @@ function safeRangeRC_(sheet, row, col, rows, cols) {
   } catch (e) { return null; }
 }
 
-/**
- * Prunes cells containing formulas from the range.
- * Returns an array of sub-ranges that do NOT contain formulas.
- */
 function pruneFormulas_(range) {
   if (!range) return [];
   const sheet = range.getSheet();
@@ -119,94 +118,103 @@ function editableRangesForSheet_(sheet) {
   const maxRows = sheet.getMaxRows();
   const ranges = [];
 
-  // Core Transaction Sheets
+  const row1004 = Math.min(maxRows, 1004);
+  const row10004 = Math.min(maxRows, 10004);
+
   if (name === 'PURCHASES') {
-    addRange_(ranges, safeRangeA1_(sheet, 'A5:C1004'));
-    addRange_(ranges, safeRangeA1_(sheet, 'E5:I1004'));
-    addRange_(ranges, safeRangeA1_(sheet, 'K5:K1004'));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 1, row1004 - 4, 3)); // A5:C1004
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, row1004 - 4, 5)); // E5:I1004
+    addRange_(ranges, safeRangeRC_(sheet, 5, 11, row1004 - 4, 1)); // K5:K1004
   } else if (name === 'EXPENSES') {
-    addRange_(ranges, safeRangeA1_(sheet, 'A5:I1004'));
-    addRange_(ranges, safeRangeA1_(sheet, 'K5:K1004'));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 1, row1004 - 4, 9)); // A5:I1004
+    addRange_(ranges, safeRangeRC_(sheet, 5, 11, row1004 - 4, 1)); // K5:K1004
   } else if (name === 'STOCK MOVEMENT APPROVAL LOG') {
-    addRange_(ranges, safeRangeA1_(sheet, 'A6:C1004'));
-    addRange_(ranges, safeRangeA1_(sheet, 'E6:I1004'));
+    addRange_(ranges, safeRangeRC_(sheet, 6, 1, row1004 - 5, 3)); // A6:C1004
+    addRange_(ranges, safeRangeRC_(sheet, 6, 5, row1004 - 5, 5)); // E6:I1004
   } else if (name === 'DAILY SALES') {
     addRange_(ranges, safeRangeA1_(sheet, 'O5:O35'));
   } else if (name === 'DAILY SALES BREAKDOWN') {
-    addRange_(ranges, safeRangeA1_(sheet, 'A5:H1004'));
-    addRange_(ranges, safeRangeA1_(sheet, 'J5:L1004'));
-    addRange_(ranges, safeRangeA1_(sheet, 'N5:N10004'));
-    addRange_(ranges, safeRangeA1_(sheet, 'P5:S1004'));
-
-  // CS Sheets
+    addRange_(ranges, safeRangeRC_(sheet, 5, 1, row1004 - 4, 8));   // A5:H1004
+    addRange_(ranges, safeRangeRC_(sheet, 5, 10, row1004 - 4, 3));  // J5:L1004
+    addRange_(ranges, safeRangeRC_(sheet, 5, 14, row10004 - 4, 1)); // N5:N10004
+    addRange_(ranges, safeRangeRC_(sheet, 5, 16, row1004 - 4, 4));  // P5:S1004
   } else if (name === 'CS STORE') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    addRange_(ranges, safeRangeA1_(sheet, 'E5:F311'));
-    addRange_(ranges, safeRangeA1_(sheet, 'O5:O311'));
-    addRange_(ranges, safeRangeA1_(sheet, 'AE5:AE311'));
+    const last = Math.min(311, lastMeaningfulRow_(sheet, 5, 2));
+    const nr = last - 4;
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));   // E5:F
+    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));  // O5:O
+    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));  // AE5:AE
   } else if (name === 'CS MINI-MART') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    addRange_(ranges, safeRangeA1_(sheet, 'E5:F100'));
-    addRange_(ranges, safeRangeA1_(sheet, 'O5:O100'));
-    addRange_(ranges, safeRangeA1_(sheet, 'AE5:AE100'));
+    const last = Math.min(100, lastMeaningfulRow_(sheet, 5, 2));
+    const nr = last - 4;
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
   } else if (name === 'CS RESTAURANT') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    addRange_(ranges, safeRangeA1_(sheet, 'E5:F94'));
-    addRange_(ranges, safeRangeA1_(sheet, 'O5:O94'));
-    addRange_(ranges, safeRangeA1_(sheet, 'AE5:AE94'));
+    const last = Math.min(94, lastMeaningfulRow_(sheet, 5, 2));
+    const nr = last - 4;
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
   } else if (name === 'CS LAUNDRY') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    addRange_(ranges, safeRangeA1_(sheet, 'E5:F50'));
-    addRange_(ranges, safeRangeA1_(sheet, 'AE5:AE50'));
+    const last = Math.min(50, lastMeaningfulRow_(sheet, 5, 2));
+    const nr = last - 4;
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
   } else if (name === 'CS BAR') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    addRange_(ranges, safeRangeA1_(sheet, 'E5:F74'));
-    addRange_(ranges, safeRangeA1_(sheet, 'O5:O74'));
-    addRange_(ranges, safeRangeA1_(sheet, 'AE5:AE74'));
+    const last = Math.min(74, lastMeaningfulRow_(sheet, 5, 2));
+    const nr = last - 4;
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
   } else if (name === 'CS KITCHEN') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    addRange_(ranges, safeRangeA1_(sheet, 'E5:F50'));
-    addRange_(ranges, safeRangeA1_(sheet, 'O5:O50'));
-    addRange_(ranges, safeRangeA1_(sheet, 'AE5:AE50'));
-
-  // Weekly M.R Sheets
+    const last = Math.min(50, lastMeaningfulRow_(sheet, 5, 2));
+    const nr = last - 4;
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
   } else if (isWeeklyMRSheet_(name)) {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:B3'));
     ['D2:H2','J2:N2','P2:T2','V2:Z2','AB2:AF2','AH2:AL2','AN2:AR2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
-
-    // Week 1 specific opening stocks
     if (isWeekOneSheet_(name)) {
-      if (name.includes('KITCHEN')) addRange_(ranges, safeRangeA1_(sheet, 'D8:D106'));
-      else if (name.includes('BUSH BAR')) addRange_(ranges, safeRangeA1_(sheet, 'D8:D102'));
-      else if (name.includes('MINI-MART')) addRange_(ranges, safeRangeA1_(sheet, 'D8:D145'));
+      let cap = 106;
+      if (name.includes('BUSH BAR')) cap = 102;
+      else if (name.includes('MINI-MART')) cap = 145;
+      const last = Math.min(cap, lastMeaningfulRow_(sheet, 8, 2));
+      addRange_(ranges, safeRangeRC_(sheet, 8, 4, last - 7, 1)); // D8:D
     }
-
-  // M.R KITCHEN U
   } else if (name === 'M.R KITCHEN U') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:B3'));
     ['D2:F2','J2:L2','P2:R2','V2:X2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
-    addRange_(ranges, safeRangeA1_(sheet, 'D8:D70'));
+    const last = Math.min(70, lastMeaningfulRow_(sheet, 8, 2));
+    addRange_(ranges, safeRangeRC_(sheet, 8, 4, last - 7, 1)); // D8:D
   }
 
   return ranges;
-}
-
-function existingSheets_(names) {
-  const ss = SpreadsheetApp.getActive();
-  return names.map(n => ss.getSheetByName(n)).filter(Boolean);
 }
 
 function getOrCreateCarlisleProtection_(sheet) {
   sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => p.remove());
   sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(p => p.remove());
   const desc = 'Carlisle EOM protection - ' + sheet.getName();
-  return sheet.protect().setDescription(desc);
+  const p = sheet.protect().setDescription(desc);
+  const owners = getOwnerEmails_();
+  if (owners.length) {
+    p.removeEditors(p.getEditors());
+    p.addEditors(owners);
+  }
+  return p;
 }
 
 function protectSheetFast_(sheet) {
   const p = getOrCreateCarlisleProtection_(sheet);
   p.setWarningOnly(false);
-  p.setDescription('Carlisle EOM protection - ' + sheet.getName());
   p.setUnprotectedRanges(editableRangesForSheet_(sheet));
   return sheet.getName();
 }
@@ -221,13 +229,6 @@ function protectSheetsFast_(sheetNames, label, maxSheetsPerRun) {
     uiAlert_('Done: ' + label + '\nSheets protected: ' + done.length + '\n' + done.join('\n'));
   });
 }
-
-function protect_Purchases(){ protectSheetsFast_(protectionGroups_().PURCHASES, 'Purchases'); }
-function protect_DailySales(){ protectSheetsFast_(protectionGroups_().DAILY_SALES, 'Daily Sales'); }
-function protect_DailySalesBreakdown(){ protectSheetsFast_(protectionGroups_().DAILY_SALES_BREAKDOWN, 'Daily Sales Breakdown'); }
-function protect_Expenses(){ protectSheetsFast_(protectionGroups_().EXPENSES, 'Expenses'); }
-function protect_StockMovement(){ protectSheetsFast_(protectionGroups_().STOCK_MOVEMENT, 'Stock Movement Approval Log'); }
-function protect_MRKitchenU(){ protectSheetsFast_(protectionGroups_().MR_KITCHEN_U, 'M.R Kitchen U'); }
 
 function runQueueProtection_(queueName, groupName, label) {
   return protectionLock_(() => {

@@ -1,60 +1,51 @@
 /****************************************************
  PERMISSION-SYNC FUNCTIONS ONLY.
- These read SYSTEM_ACCESS and update protection editors.
- Run separately from protection creation to avoid timeouts.
+ These read SYSTEM_ACCESS and update Spreadsheet-level editors.
+ Sheet-level structural protections (locked ranges) are maintained
+ by Menu 1 and remain fixed once applied.
 ****************************************************/
 
-function usersForSheetFromAccess_(sheetName) {
-  const owners = getOwnerEmails_();
-  const directUsers = usersForSheet_(sheetName);
-  return Array.from(new Set(owners.concat(directUsers).filter(Boolean)));
+/**
+ * Returns an array of user emails that should have edit access to the spreadsheet
+ * based on SYSTEM_ACCESS sheet.
+ */
+function getActiveStaffEmails_(records) {
+  return Array.from(new Set(records.map(r => r.email).filter(Boolean)));
 }
 
-function syncPermissionsForSheetNames_(sheetNames, label) {
+function syncUserPermissions_All() {
   const lock = LockService.getDocumentLock();
   if (!lock.tryLock(15000)) throw new Error('Another Carlisle permission task is already running. Try again shortly.');
   try {
     const ss = SpreadsheetApp.getActive();
-    const targetNames = new Set(sheetNames.map(key_));
-    let count = 0;
-    ss.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => {
-      const range = p.getRange();
-      if (!range) return;
-      const sheetName = range.getSheet().getName();
-      if (!targetNames.has(key_(sheetName))) return;
-      const editors = usersForSheetFromAccess_(sheetName);
-      try { p.removeEditors(p.getEditors()); } catch (e) {}
-      if (editors.length) p.addEditors(editors);
-      count++;
-    });
-    log_('PERMISSION_SYNC', 'Synced editors for ' + label + ': ' + count + ' protections.');
-    uiAlert_('Done syncing permissions: ' + label + '\nProtections updated: ' + count);
+    const records = getAccessRecords_(); // Read once
+    if (!records.length) throw new Error('No active staff found in SYSTEM_ACCESS.');
+
+    const staffEmails = getActiveStaffEmails_(records);
+    const ownerEmails = getOwnerEmails_();
+
+    const currentEditors = ss.getEditors().map(e => e.getEmail().toLowerCase());
+    const staffLower = staffEmails.map(e => e.toLowerCase());
+
+    // Add missing staff as spreadsheet editors
+    const toAdd = staffEmails.filter(e => !currentEditors.includes(e.toLowerCase()));
+    if (toAdd.length) ss.addEditors(toAdd);
+
+    // Logic: We don't remove editors here because they might have been added manually.
+    // However, if we want strict control, we would remove anyone not in staffLower or ownerEmails.
+
+    log_('PERMISSION_SYNC', 'Synced ' + staffEmails.length + ' staff members to spreadsheet editors.');
+    uiAlert_('Spreadsheet editors synced with SYSTEM_ACCESS.\nTotal staff: ' + staffEmails.length);
   } finally {
     lock.releaseLock();
   }
 }
 
-function syncUserPermissions_All() {
-  const ss = SpreadsheetApp.getActive();
-  const allNames = ss.getSheets().map(sh => sh.getName());
-  syncPermissionsForSheetNames_(allNames, 'ALL');
-}
-function syncUserPermissions_Purchases(){ syncPermissionsForSheetNames_(protectionGroups_().PURCHASES, 'Purchases'); }
-function syncUserPermissions_CSSheets(){ syncPermissionsForSheetNames_(protectionGroups_().CS_SHEETS, 'CS Sheets'); }
-function syncUserPermissions_WeeklyMR(){ syncPermissionsForSheetNames_(protectionGroups_().WEEKLY_MR.concat(protectionGroups_().MR_KITCHEN_U), 'Weekly M.R Sheets'); }
-
-/****************************************************
- V13 SMALLER PERMISSION SYNC GROUPS
- Run these after the corresponding protections if needed.
-****************************************************/
-function syncUserPermissions_Weekly_Week1(){ syncPermissionsForSheetNames_(weeklyGroupsV13_().WEEK1, 'Weekly M.R - Week 1'); }
-function syncUserPermissions_Weekly_Week2(){ syncPermissionsForSheetNames_(weeklyGroupsV13_().WEEK2, 'Weekly M.R - Week 2'); }
-function syncUserPermissions_Weekly_Week3(){ syncPermissionsForSheetNames_(weeklyGroupsV13_().WEEK3, 'Weekly M.R - Week 3'); }
-function syncUserPermissions_Weekly_Week4(){ syncPermissionsForSheetNames_(weeklyGroupsV13_().WEEK4, 'Weekly M.R - Week 4'); }
-function syncUserPermissions_Weekly_Week5(){ syncPermissionsForSheetNames_(weeklyGroupsV13_().WEEK5, 'Weekly M.R - Week 5'); }
-
+/**
+ * Note: syncPermissionsForSheetNames_ is deprecated in the new architecture
+ * because structural sheet protection should only have Owners as editors.
+ * Cashiers edit through unblocked ranges.
+ */
 function syncUserPermissions_ActiveSheetOnly() {
-  const sheet = SpreadsheetApp.getActiveSheet();
-  if (!sheet) throw new Error('No active sheet found.');
-  syncPermissionsForSheetNames_([sheet.getName()], 'Active sheet only: ' + sheet.getName());
+  syncUserPermissions_All();
 }
