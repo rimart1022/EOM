@@ -107,18 +107,6 @@ function addRange_(arr, range) {
   pruned.forEach(r => arr.push(r));
 }
 
-function lastMeaningfulRow_(sheet, startRow, keyCol) {
-  const max = sheet.getMaxRows();
-  if (max < startRow) return startRow - 1;
-  const numRows = max - startRow + 1;
-  const vals = sheet.getRange(startRow, keyCol, numRows, 1).getDisplayValues();
-  let last = startRow - 1;
-  for (let i = vals.length - 1; i >= 0; i--) {
-    if (String(vals[i][0] || '').trim() !== '') { last = startRow + i; break; }
-  }
-  return Math.max(last, startRow);
-}
-
 function isWeekOneSheet_(name) {
   const n = key_(name);
   return n === 'M.R MINI-MART' || n === 'M.R BUSH BAR' || n === 'M.R KITCHEN';
@@ -126,9 +114,6 @@ function isWeekOneSheet_(name) {
 function isWeeklyMRSheet_(name) {
   const n = key_(name);
   return n.includes('M.R') && (n.includes('MINI-MART') || n.includes('BUSH BAR') || n.includes('KITCHEN')) && !n.includes('KITCHEN U');
-}
-function isCSSheet_(name) {
-  return key_(name).startsWith('CS ');
 }
 
 function editableRangesForSheet_(sheet) {
@@ -162,38 +147,38 @@ function editableRangesForSheet_(sheet) {
   } else if (name === 'CS STORE') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
     const nr = Math.min(311, maxRows) - 4;
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));   // E5:F
-    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));  // O5:O
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));  // AE5:AE
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));   // E5:F311
+    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));  // O5:O311
+    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));  // AE5:AE311
   } else if (name === 'CS MINI-MART') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
     const nr = Math.min(100, maxRows) - 4;
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));   // E5:F100
+    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));  // O5:O100
+    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));  // AE5:AE100
   } else if (name === 'CS RESTAURANT') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
     const nr = Math.min(94, maxRows) - 4;
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));   // E5:F94
+    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));  // O5:O94
+    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));  // AE5:AE94
   } else if (name === 'CS LAUNDRY') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
     const nr = Math.min(50, maxRows) - 4;
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));   // E5:F50
+    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));  // AE5:AE50
   } else if (name === 'CS BAR') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
     const nr = Math.min(74, maxRows) - 4;
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));   // E5:F74
+    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));  // O5:O74
+    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));  // AE5:AE74
   } else if (name === 'CS KITCHEN') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
     const nr = Math.min(50, maxRows) - 4;
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
+    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));   // E5:F50
+    addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));  // O5:O50
+    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));  // AE5:AE50
 
   // Weekly M.R Sheets
   } else if (isWeeklyMRSheet_(name)) {
@@ -204,7 +189,7 @@ function editableRangesForSheet_(sheet) {
       if (name.includes('BUSH BAR')) cap = 102;
       else if (name.includes('MINI-MART')) cap = 145;
       const nr = Math.min(cap, maxRows) - 7;
-      addRange_(ranges, safeRangeRC_(sheet, 8, 4, nr, 1)); // D8:D
+      addRange_(ranges, safeRangeRC_(sheet, 8, 4, nr, 1)); // D8:D (Opening Stock)
     }
 
   // M.R KITCHEN U
@@ -286,6 +271,9 @@ function protect_MRKitchenU(){ protectSheetsFast_(protectionGroups_().MR_KITCHEN
 
 function protect_AdminSheets_Next() { runQueueProtection_('ADMIN_PROTECT_INDEX', 'ADMIN', 'Owner/Admin'); }
 function resetAdminProtectionQueue() { PropertiesService.getDocumentProperties().deleteProperty('ADMIN_PROTECT_INDEX'); uiAlert_('Admin queue reset.'); }
+
+function protect_CSSheets_Next() { runQueueProtection_('CS_PROTECT_INDEX', 'CS_SHEETS', 'CS Sheets'); }
+function resetCSSheetsProtectionQueue() { PropertiesService.getDocumentProperties().deleteProperty('CS_PROTECT_INDEX'); uiAlert_('CS Sheets queue reset.'); }
 
 function protect_CSSheets(){ protectSheetsFast_(protectionGroups_().CS_SHEETS, 'CS Sheets'); }
 
