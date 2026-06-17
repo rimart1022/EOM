@@ -107,14 +107,10 @@ function findHeaderCol_(sheet, names, headerRows) {
   return null;
 }
 
-/**
- * Checks if the user is an authorized approver (Owner, MD, or ALL access).
- */
 function isAuthorizedApprover_(email) {
   const records = getAccessRecords_();
   const user = records.find(r => r.email.toLowerCase() === email.toLowerCase());
   if (!user) return false;
-  // CONFIG.OWNER_ROLES includes OWNER, MANAGING DIRECTOR, and MD
   return CONFIG.OWNER_ROLES.includes(user.role) || user.sheets.includes('ALL') || user.sheets.includes('OWNER SHEETS');
 }
 
@@ -140,8 +136,8 @@ function handleApprovalEdit_(e) {
   if (approvedDate) sh.getRange(e.range.getRow(), approvedDate.col).setValue(new Date());
 
   if (status === 'APPROVED') {
-    syncMasterPriceCostsFromApprovedMovements();
-    syncQuantitiesFromApprovedMovements();
+    syncSingleMovementToMasterPriceList_(sh, e.range.getRow());
+    syncSingleMovementToDepartment_(sh, e.range.getRow());
   }
 }
 
@@ -150,6 +146,67 @@ function handleMasterPriceCostUpdate_(e) {
   if (sheetName !== 'PURCHASES') return;
   if (e.range.getColumn() === 11 && e.range.getRow() >= 5) {
     syncMasterPriceCostsFromApprovedMovements();
+  }
+}
+
+function syncSingleMovementToMasterPriceList_(sh, row) {
+  const codeHeader = findHeaderCol_(sh, ['ITEM CODE','CODE'], 10);
+  const costHeader = findHeaderCol_(sh, ['UNIT COST','COST PRICE','UNIT VALUE','PURCHASE UNIT PRICE'], 10);
+  if (!codeHeader || !costHeader) return;
+
+  const code = String(sh.getRange(row, codeHeader.col).getValue() || '').trim();
+  const cost = sh.getRange(row, costHeader.col).getValue();
+  if (!code || isNaN(Number(cost))) return;
+
+  const master = SpreadsheetApp.getActive().getSheetByName(CONFIG.MASTER_PRICE_LIST) || SpreadsheetApp.getActive().getSheetByName('MASTER PRICE LIST');
+  if (!master) return;
+
+  const mCodeHeader = findHeaderCol_(master, ['ITEM CODE','CODE'], 10) || {row: 1, col: 2};
+  const mCostHeader = findHeaderCol_(master, ['COST PRICE','UNIT COST','COST'], 10) || {row: 1, col: 3};
+
+  const mData = master.getRange(mCodeHeader.row + 1, mCodeHeader.col, Math.max(master.getLastRow() - mCodeHeader.row, 1), 1).getValues();
+  for (let i = 0; i < mData.length; i++) {
+    if (String(mData[i][0]).trim() === code) {
+      master.getRange(mCodeHeader.row + 1 + i, mCostHeader.col).setValue(Number(cost));
+      break;
+    }
+  }
+}
+
+function syncSingleMovementToDepartment_(sh, row) {
+  const deptCol = findHeaderCol_(sh, ['DEPARTMENT'], 10);
+  const codeCol = findHeaderCol_(sh, ['ITEM CODE','CODE'], 10);
+  const qtyCol = findHeaderCol_(sh, ['QTY','QUANTITY'], 10);
+  const typeCol = findHeaderCol_(sh, ['MOVEMENT TYPE'], 10);
+  if (!deptCol || !codeCol || !qtyCol || !typeCol) return;
+
+  const deptName = String(sh.getRange(row, deptCol.col).getValue() || '').trim();
+  const code = String(sh.getRange(row, codeCol.col).getValue() || '').trim();
+  const qty = Number(sh.getRange(row, qtyCol.col).getValue() || 0);
+  const type = key_(sh.getRange(row, typeCol.col).getValue());
+
+  const deptSh = SpreadsheetApp.getActive().getSheetByName(deptName);
+  if (!deptSh) return;
+
+  const dCode = findHeaderCol_(deptSh, ['ITEM CODE','CODE'], 10);
+  if (!dCode) return;
+
+  let targetCol = null;
+  if (type === 'SOLD' || type === 'UTILIZED') targetCol = findHeaderCol_(deptSh, ['SOLD'], 10);
+  else if (type === 'DAMAGED' || type === 'DAMAGE') targetCol = findHeaderCol_(deptSh, ['DAMAGED','DAMAGE'], 10);
+  else if (type === 'ISSUED') targetCol = findHeaderCol_(deptSh, ['ISSUED'], 10);
+  else if (type === 'ADDED') targetCol = findHeaderCol_(deptSh, ['ADDED STOCK','ADDED'], 10);
+
+  if (!targetCol) return;
+
+  const lastD = deptSh.getLastRow();
+  const dData = deptSh.getRange(dCode.row + 1, dCode.col, Math.max(lastD - dCode.row, 1), 1).getValues();
+  for (let i = 0; i < dData.length; i++) {
+    if (String(dData[i][0]).trim() === code) {
+      const currentQty = Number(deptSh.getRange(dCode.row + 1 + i, targetCol.col).getValue() || 0);
+      deptSh.getRange(dCode.row + 1 + i, targetCol.col).setValue(currentQty + qty);
+      break;
+    }
   }
 }
 
@@ -377,7 +434,8 @@ function refreshApprovalTimestamps() {
 }
 
 function isCSSheet_(name) {
-  return key_(name).startsWith('CS ');
+  const n = key_(name);
+  return n.startsWith('CS ');
 }
 function isWeeklyMRSheet_(name) {
   const n = key_(name);

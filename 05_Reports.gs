@@ -15,7 +15,7 @@ function ensureReportSheet_(name, headers) {
 function approvalLogRows_() {
   const sh = SpreadsheetApp.getActive().getSheetByName('STOCK MOVEMENT APPROVAL LOG');
   if (!sh) return {headers: [], rows: []};
-  const headerRow = 5; // Carlisle approval log entries usually start around row 6.
+  const headerRow = 5;
   const headers = sh.getRange(headerRow, 1, 1, sh.getLastColumn()).getValues()[0];
   const rows = sh.getLastRow() > headerRow ? sh.getRange(headerRow + 1, 1, sh.getLastRow() - headerRow, sh.getLastColumn()).getValues() : [];
   return {headers, rows};
@@ -64,6 +64,16 @@ function generateUtilizedReport() {
 function generateStaffLiabilityReport() {
   const count = movementReport_(['DAMAGE','DAMAGED'], 'STAFF LIABILITY REPORT');
   uiAlert_('Staff Liability Report generated from approved/non-rejected damages. Rows: ' + count);
+}
+
+function clearAllReports() {
+  const ss = SpreadsheetApp.getActive();
+  const reports = ['DAMAGE REPORT','ISSUED STOCK REPORT','UTILIZED REPORT','STAFF LIABILITY REPORT','STOCK AUDIT SUMMARY','FORMULA ERROR CHECK'];
+  reports.forEach(r => {
+    const sh = ss.getSheetByName(r);
+    if (sh) sh.clear();
+  });
+  uiAlert_('All report sheets cleared.');
 }
 
 function generateStockAuditSummary() {
