@@ -106,9 +106,7 @@ function onOpen() {
       .addItem('Rebuild SYSTEM_ACCESS', 'rebuildSystemAccess')
       .addItem('Setup SYSTEM_ACCESS Dropdowns', 'setupSystemAccessDropdowns')
       .addItem('Validate SYSTEM_ACCESS', 'validateSystemAccess')
-      .addItem('Sync User Permissions', 'syncUserPermissions_All')
-      .addSeparator()
-      .addItem('Sync Permissions - ACTIVE Sheet Only', 'syncUserPermissions_ActiveSheetOnly'))
+      .addItem('Sync User Permissions', 'syncUserPermissions_All'))
     .addSubMenu(ui.createMenu('Carlisle Reports')
       .addItem('Generate Damage Report', 'generateDamageReport')
       .addItem('Generate Issued Stock Report', 'generateIssuedStockReport')
@@ -144,5 +142,9 @@ function log_(type, message) {
 }
 
 function uiAlert_(message) {
-  SpreadsheetApp.getUi().alert(message);
+  try {
+    SpreadsheetApp.getUi().alert(message);
+  } catch (e) {
+    console.warn("UI Alert suppressed: " + message);
+  }
 }

@@ -32,14 +32,29 @@ function protectionLock_(callback) {
 
 function existingSheets_(names) {
   const ss = SpreadsheetApp.getActive();
-  return names.map(n => ss.getSheetByName(n)).filter(Boolean);
+  const all = ss.getSheets();
+  const out = [];
+  names.forEach(n => {
+    const k = key_(n);
+    const sh = all.find(s => key_(s.getName()) === k);
+    if (sh) out.push(sh);
+  });
+  return out;
 }
 
 function safeRangeA1_(sheet, a1) {
   try {
     const r = sheet.getRange(a1);
-    if (r.getLastRow() > sheet.getMaxRows() || r.getLastColumn() > sheet.getMaxColumns()) return null;
-    return r;
+    const maxR = sheet.getMaxRows();
+    const maxC = sheet.getMaxColumns();
+    let startR = r.getRow();
+    let startC = r.getColumn();
+    let numR = r.getNumRows();
+    let numC = r.getNumColumns();
+    if (startR > maxR || startC > maxC) return null;
+    numR = Math.min(numR, maxR - startR + 1);
+    numC = Math.min(numC, maxC - startC + 1);
+    return sheet.getRange(startR, startC, numR, numC);
   } catch (e) { return null; }
 }
 
@@ -56,6 +71,10 @@ function safeRangeRC_(sheet, row, col, rows, cols) {
   } catch (e) { return null; }
 }
 
+/**
+ * Optimized pruneFormulas to consolidate contiguous unprotected ranges.
+ * This stays under the 50-unprotected-range limit in Google Sheets.
+ */
 function pruneFormulas_(range) {
   if (!range) return [];
   const sheet = range.getSheet();
@@ -67,19 +86,20 @@ function pruneFormulas_(range) {
 
   const unprotected = [];
   for (let c = 0; c < numCols; c++) {
-    let start = -1;
+    let currentStart = -1;
     for (let r = 0; r < numRows; r++) {
-      if (!formulas[r][c]) {
-        if (start === -1) start = r;
+      const hasFormula = !!formulas[r][c];
+      if (!hasFormula) {
+        if (currentStart === -1) currentStart = r;
       } else {
-        if (start !== -1) {
-          unprotected.push(sheet.getRange(startRow + start, startCol + c, r - start, 1));
-          start = -1;
+        if (currentStart !== -1) {
+          unprotected.push(sheet.getRange(startRow + currentStart, startCol + c, r - currentStart, 1));
+          currentStart = -1;
         }
       }
     }
-    if (start !== -1) {
-      unprotected.push(sheet.getRange(startRow + start, startCol + c, numRows - start, 1));
+    if (currentStart !== -1) {
+      unprotected.push(sheet.getRange(startRow + currentStart, startCol + c, numRows - currentStart, 1));
     }
   }
   return unprotected;
@@ -104,23 +124,26 @@ function lastMeaningfulRow_(sheet, startRow, keyCol) {
 }
 
 function isWeekOneSheet_(name) {
-  return /^(M\.R MINI-MART|M\.R BUSH BAR|M\.R KITCHEN)$/i.test(name);
+  const n = key_(name);
+  return n === 'M.R MINI-MART' || n === 'M.R BUSH BAR' || n === 'M.R KITCHEN';
 }
 function isWeeklyMRSheet_(name) {
-  return /^(\d\s+)?M\.R (MINI-MART|BUSH BAR|KITCHEN)$/i.test(name);
+  const n = key_(name);
+  return n.includes('M.R') && (n.includes('MINI-MART') || n.includes('BUSH BAR') || n.includes('KITCHEN')) && !n.includes('KITCHEN U');
 }
 function isCSSheet_(name) {
-  return /^CS (MINI-MART|LAUNDRY|BAR|RESTAURANT|STORE|KITCHEN)$/i.test(name);
+  return key_(name).startsWith('CS ');
 }
 
 function editableRangesForSheet_(sheet) {
-  const name = sheet.getName().toUpperCase();
+  const name = key_(sheet.getName());
   const maxRows = sheet.getMaxRows();
   const ranges = [];
 
   const row1004 = Math.min(maxRows, 1004);
   const row10004 = Math.min(maxRows, 10004);
 
+  // Core Transaction Sheets
   if (name === 'PURCHASES') {
     addRange_(ranges, safeRangeRC_(sheet, 5, 1, row1004 - 4, 3)); // A5:C1004
     addRange_(ranges, safeRangeRC_(sheet, 5, 5, row1004 - 4, 5)); // E5:I1004
@@ -138,47 +161,45 @@ function editableRangesForSheet_(sheet) {
     addRange_(ranges, safeRangeRC_(sheet, 5, 10, row1004 - 4, 3));  // J5:L1004
     addRange_(ranges, safeRangeRC_(sheet, 5, 14, row10004 - 4, 1)); // N5:N10004
     addRange_(ranges, safeRangeRC_(sheet, 5, 16, row1004 - 4, 4));  // P5:S1004
+
+  // CS Sheets
   } else if (name === 'CS STORE') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    const last = Math.min(311, lastMeaningfulRow_(sheet, 5, 2));
-    const nr = last - 4;
+    const nr = Math.min(311, maxRows) - 4;
     addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));   // E5:F
     addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));  // O5:O
     addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));  // AE5:AE
   } else if (name === 'CS MINI-MART') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    const last = Math.min(100, lastMeaningfulRow_(sheet, 5, 2));
-    const nr = last - 4;
+    const nr = Math.min(100, maxRows) - 4;
     addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
     addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
     addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
   } else if (name === 'CS RESTAURANT') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    const last = Math.min(94, lastMeaningfulRow_(sheet, 5, 2));
-    const nr = last - 4;
+    const nr = Math.min(94, maxRows) - 4;
     addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
     addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
     addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
   } else if (name === 'CS LAUNDRY') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    const last = Math.min(50, lastMeaningfulRow_(sheet, 5, 2));
-    const nr = last - 4;
+    const nr = Math.min(50, maxRows) - 4;
     addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
     addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
   } else if (name === 'CS BAR') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    const last = Math.min(74, lastMeaningfulRow_(sheet, 5, 2));
-    const nr = last - 4;
+    const nr = Math.min(74, maxRows) - 4;
     addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
     addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
     addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
   } else if (name === 'CS KITCHEN') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    const last = Math.min(50, lastMeaningfulRow_(sheet, 5, 2));
-    const nr = last - 4;
+    const nr = Math.min(50, maxRows) - 4;
     addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
     addRange_(ranges, safeRangeRC_(sheet, 5, 15, nr, 1));
     addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
+
+  // Weekly M.R Sheets
   } else if (isWeeklyMRSheet_(name)) {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:B3'));
     ['D2:H2','J2:N2','P2:T2','V2:Z2','AB2:AF2','AH2:AL2','AN2:AR2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
@@ -186,14 +207,16 @@ function editableRangesForSheet_(sheet) {
       let cap = 106;
       if (name.includes('BUSH BAR')) cap = 102;
       else if (name.includes('MINI-MART')) cap = 145;
-      const last = Math.min(cap, lastMeaningfulRow_(sheet, 8, 2));
-      addRange_(ranges, safeRangeRC_(sheet, 8, 4, last - 7, 1)); // D8:D
+      const nr = Math.min(cap, maxRows) - 7;
+      addRange_(ranges, safeRangeRC_(sheet, 8, 4, nr, 1)); // D8:D
     }
+
+  // M.R KITCHEN U
   } else if (name === 'M.R KITCHEN U') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:B3'));
     ['D2:F2','J2:L2','P2:R2','V2:X2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
-    const last = Math.min(70, lastMeaningfulRow_(sheet, 8, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 8, 4, last - 7, 1)); // D8:D
+    const nr = Math.min(70, maxRows) - 7;
+    addRange_(ranges, safeRangeRC_(sheet, 8, 4, nr, 1)); // D8:D
   }
 
   return ranges;
@@ -215,7 +238,12 @@ function getOrCreateCarlisleProtection_(sheet) {
 function protectSheetFast_(sheet) {
   const p = getOrCreateCarlisleProtection_(sheet);
   p.setWarningOnly(false);
-  p.setUnprotectedRanges(editableRangesForSheet_(sheet));
+  const unprotected = editableRangesForSheet_(sheet);
+  if (unprotected.length) {
+    // Google Sheets has a limit of 50 unprotected ranges per sheet protection.
+    // Our consolidated pruneFormulas_ helps keep this count low.
+    p.setUnprotectedRanges(unprotected.slice(0, 50));
+  }
   return sheet.getName();
 }
 
@@ -240,10 +268,11 @@ function runQueueProtection_(queueName, groupName, label) {
       uiAlert_(label + ' protection queue already complete.');
       return;
     }
-    const ss = SpreadsheetApp.getActive();
+    const allSheets = SpreadsheetApp.getActive().getSheets();
     let protectedName = null;
     while (idx < names.length) {
-      const sh = ss.getSheetByName(names[idx]);
+      const targetKey = key_(names[idx]);
+      const sh = allSheets.find(s => key_(s.getName()) === targetKey);
       idx++;
       if (sh) { protectedName = protectSheetFast_(sh); break; }
     }
@@ -254,13 +283,20 @@ function runQueueProtection_(queueName, groupName, label) {
   });
 }
 
+function protect_Purchases(){ protectSheetsFast_(protectionGroups_().PURCHASES, 'Purchases'); }
+function protect_DailySales(){ protectSheetsFast_(protectionGroups_().DAILY_SALES, 'Daily Sales'); }
+function protect_DailySalesBreakdown(){ protectSheetsFast_(protectionGroups_().DAILY_SALES_BREAKDOWN, 'Daily Sales Breakdown'); }
+function protect_Expenses(){ protectSheetsFast_(protectionGroups_().EXPENSES, 'Expenses'); }
+function protect_StockMovement(){ protectSheetsFast_(protectionGroups_().STOCK_MOVEMENT, 'Stock Movement Approval Log'); }
+function protect_MRKitchenU(){ protectSheetsFast_(protectionGroups_().MR_KITCHEN_U, 'M.R Kitchen U'); }
+
 function protect_AdminSheets_Next() { runQueueProtection_('ADMIN_PROTECT_INDEX', 'ADMIN', 'Owner/Admin'); }
 function resetAdminProtectionQueue() { PropertiesService.getDocumentProperties().deleteProperty('ADMIN_PROTECT_INDEX'); uiAlert_('Admin queue reset.'); }
 
 function protect_CSSheets_Next() { runQueueProtection_('CS_PROTECT_INDEX', 'CS_SHEETS', 'CS Sheets'); }
 function resetCSSheetsProtectionQueue() { PropertiesService.getDocumentProperties().deleteProperty('CS_PROTECT_INDEX'); uiAlert_('CS Sheets queue reset.'); }
 
-function protect_CSSheets(){ protect_CSSheets_Next(); }
+function protect_CSSheets(){ protectSheetsFast_(protectionGroups_().CS_SHEETS, 'CS Sheets', 2); }
 
 function weeklyGroupsV13_() {
   return {
