@@ -1,5 +1,5 @@
 /****************************************************
- AUTOMATION: approval timestamps, edit log, master price cost update.
+ AUTOMATION: approval timestamps, edit log, master price cost update, quantity sync.
  Kept separate from protection/permission logic.
 ****************************************************/
 
@@ -29,21 +29,17 @@ function checkSheetPermission_(e) {
   const userEmail = Session.getActiveUser().getEmail();
   const sheetName = e.range.getSheet().getName();
 
-  // Basic exclusion for system sheets that are already Owner-only protected
   const systemSheets = ['SYSTEM_ACCESS','SYSTEM_LOGS','SYSTEM_SETTINGS','EOM EDIT LOG','STOCK CHANGE LOG'];
   if (systemSheets.includes(sheetName.toUpperCase())) return false;
 
-  // Owners always have permission
   if (isOwner_(userEmail)) return false;
 
-  // Check if the user is authorized for this sheet
   const authorizedUsers = usersForSheet_(sheetName);
   if (!authorizedUsers.map(u => u.toLowerCase()).includes(userEmail.toLowerCase())) {
     e.range.setValue(e.oldValue || '');
     uiAlert_('Access Denied: You are not assigned to control the sheet "' + sheetName + '" in SYSTEM_ACCESS.');
     return true;
   }
-
   return false;
 }
 
@@ -60,7 +56,6 @@ function preventApprovedEdit_(e) {
   const row = e.range.getRow();
   if (row <= statusCell.row) return false;
 
-  // Get current status of the row
   const status = key_(sh.getRange(row, statusCell.col).getValue());
   if (status !== 'APPROVED') return false;
 
@@ -70,7 +65,6 @@ function preventApprovedEdit_(e) {
     uiAlert_('Action Denied: This movement has already been APPROVED and is now locked. Only an Owner can modify it.');
     return true;
   }
-
   return false;
 }
 
@@ -141,7 +135,10 @@ function handleApprovalEdit_(e) {
   if (approvedBy) sh.getRange(e.range.getRow(), approvedBy.col).setValue(userEmail);
   if (approvedDate) sh.getRange(e.range.getRow(), approvedDate.col).setValue(new Date());
 
-  if (status === 'APPROVED') syncMasterPriceCostsFromApprovedMovements();
+  if (status === 'APPROVED') {
+    syncMasterPriceCostsFromApprovedMovements();
+    syncQuantitiesFromApprovedMovements();
+  }
 }
 
 function handleMasterPriceCostUpdate_(e) {
@@ -224,6 +221,88 @@ function syncMasterPriceCostsFromApprovedMovements() {
     log_('MASTER_PRICE_SYNC', 'Updated cost prices: ' + updates);
     uiAlert_('Master Price List cost sync complete. Updates made: ' + updates);
   }
+}
+
+/**
+ * Synchronizes approved quantities to departmental sheets.
+ * SOLD/UTILIZED -> Sold, DAMAGED -> Damaged, ISSUED -> Issued, ADDED -> Added Stock.
+ */
+function syncQuantitiesFromApprovedMovements() {
+  const ss = SpreadsheetApp.getActive();
+  const logSh = ss.getSheetByName('STOCK MOVEMENT APPROVAL LOG');
+  if (!logSh) return;
+
+  const lDept = findHeaderCol_(logSh, ['DEPARTMENT'], 10);
+  const lCode = findHeaderCol_(logSh, ['ITEM CODE','CODE'], 10);
+  const lQty = findHeaderCol_(logSh, ['QTY','QUANTITY'], 10);
+  const lType = findHeaderCol_(logSh, ['MOVEMENT TYPE'], 10);
+  const lStatus = findHeaderCol_(logSh, ['STATUS'], 10);
+
+  if (!lDept || !lCode || !lQty || !lType || !lStatus) return;
+
+  const lastL = logSh.getLastRow();
+  if (lastL <= lStatus.row) return;
+
+  const lData = logSh.getRange(lStatus.row + 1, 1, lastL - lStatus.row, logSh.getLastColumn()).getValues();
+
+  // Aggregate movements by Department and Item Code
+  const aggregates = {}; // { Dept: { Code: { Sold: 0, Damaged: 0, Issued: 0, Added: 0 } } }
+
+  lData.forEach(row => {
+    if (key_(row[lStatus.col - 1]) !== 'APPROVED') return;
+    const dept = String(row[lDept.col - 1] || '').trim();
+    const code = String(row[lCode.col - 1] || '').trim();
+    const qty = Number(row[lQty.col - 1] || 0);
+    const type = key_(row[lType.col - 1]);
+
+    if (!dept || !code || isNaN(qty)) return;
+    if (!aggregates[dept]) aggregates[dept] = {};
+    if (!aggregates[dept][code]) aggregates[dept][code] = { sold: 0, damaged: 0, issued: 0, added: 0 };
+
+    if (type === 'SOLD' || type === 'UTILIZED') aggregates[dept][code].sold += qty;
+    else if (type === 'DAMAGED' || type === 'DAMAGE') aggregates[dept][code].damaged += qty;
+    else if (type === 'ISSUED') aggregates[dept][code].issued += qty;
+    else if (type === 'ADDED') aggregates[dept][code].added += qty;
+  });
+
+  let updates = 0;
+  Object.keys(aggregates).forEach(deptName => {
+    const deptSh = ss.getSheetByName(deptName);
+    if (!deptSh) return;
+
+    const dCode = findHeaderCol_(deptSh, ['ITEM CODE','CODE'], 10);
+    if (!dCode) return;
+
+    const dSold = findHeaderCol_(deptSh, ['SOLD'], 10);
+    const dDamaged = findHeaderCol_(deptSh, ['DAMAGED','DAMAGE'], 10);
+    const dIssued = findHeaderCol_(deptSh, ['ISSUED'], 10);
+    const dAdded = findHeaderCol_(deptSh, ['ADDED STOCK','ADDED'], 10);
+
+    const lastD = deptSh.getLastRow();
+    if (lastD <= dCode.row) return;
+
+    const dRange = deptSh.getRange(dCode.row + 1, 1, lastD - dCode.row, deptSh.getLastColumn());
+    const dData = dRange.getValues();
+    let deptUpdated = false;
+
+    dData.forEach((row, i) => {
+      const code = String(row[dCode.col - 1] || '').trim();
+      const move = aggregates[deptName][code];
+      if (!move) return;
+
+      if (dSold && move.sold > 0) { row[dSold.col - 1] = move.sold; deptUpdated = true; }
+      if (dDamaged && move.damaged > 0) { row[dDamaged.col - 1] = move.damaged; deptUpdated = true; }
+      if (dIssued && move.issued > 0) { row[dIssued.col - 1] = move.issued; deptUpdated = true; }
+      if (dAdded && move.added > 0) { row[dAdded.col - 1] = move.added; deptUpdated = true; }
+    });
+
+    if (deptUpdated) {
+      dRange.setValues(dData);
+      updates++;
+    }
+  });
+
+  if (updates > 0) log_('QUANTITY_SYNC', 'Updated quantities in ' + updates + ' departments.');
 }
 
 function syncMasterPriceItemsFromDepartments() {

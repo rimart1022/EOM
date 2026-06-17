@@ -22,6 +22,7 @@ const CONFIG = {
     'PORTER','SECURITY','MOPOL','GARDENER','MARKETER','SOCIAL MEDIA','INTERN'
   ],
 
+  // These are options that can be typed or selected in SYSTEM_ACCESS > Sheets Controlled.
   SHEET_CONTROL_OPTIONS: [
     'ALL','OWNER SHEETS','ADMIN SHEETS','SYSTEM SHEETS','LOG SHEETS','REPORT SHEETS','REPORTS','CS SHEETS','ALL CS SHEETS','WEEKLY M.R SHEETS',
     'WEEKLY M.R WEEK 1-2','WEEKLY M.R WEEK 3-4','WEEKLY M.R WEEK 5',
@@ -59,6 +60,12 @@ const CONFIG = {
     'MASTER_PRICELIST': ['MASTER_PRICELIST'],
     'CS SHEETS': ['CS MINI-MART','CS LAUNDRY','CS BAR','CS RESTAURANT','CS STORE','CS KITCHEN'],
     'ALL CS SHEETS': ['CS MINI-MART','CS LAUNDRY','CS BAR','CS RESTAURANT','CS STORE','CS KITCHEN'],
+    'CS MINI-MART': ['CS MINI-MART'],
+    'CS LAUNDRY': ['CS LAUNDRY'],
+    'CS BAR': ['CS BAR'],
+    'CS RESTAURANT': ['CS RESTAURANT'],
+    'CS STORE': ['CS STORE'],
+    'CS KITCHEN': ['CS KITCHEN'],
     'WEEKLY M.R SHEETS': ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','2 M.R MINI-MART','3 M.R MINI-MART','4 M.R MINI-MART','5 M.R MINI-MART','2 M.R BUSH BAR','3 M.R BUSH BAR','4 M.R BUSH BAR','5 M.R BUSH BAR','2 M.R KITCHEN','3 M.R KITCHEN','4 M.R KITCHEN','5 M.R KITCHEN'],
     'WEEKLY M.R WEEK 1-2': ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','2 M.R MINI-MART','2 M.R BUSH BAR','2 M.R KITCHEN'],
     'WEEKLY M.R WEEK 3-4': ['3 M.R MINI-MART','3 M.R BUSH BAR','3 M.R KITCHEN','4 M.R MINI-MART','4 M.R BUSH BAR','4 M.R KITCHEN'],
@@ -112,6 +119,7 @@ function onOpen() {
     .addSubMenu(ui.createMenu('Utilities')
       .addItem('Refresh Approval Timestamps', 'refreshApprovalTimestamps')
       .addItem('Run Master Price Cost Sync', 'syncMasterPriceCostsFromApprovedMovements')
+      .addItem('Run Quantity Movement Sync', 'syncQuantitiesFromApprovedMovements')
       .addItem('Sync Master Price Items from Departments', 'syncMasterPriceItemsFromDepartments'))
     .addToUi();
 }
