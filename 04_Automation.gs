@@ -32,7 +32,7 @@ function checkSheetPermission_(e) {
   const systemSheets = ['SYSTEM_ACCESS','SYSTEM_LOGS','SYSTEM_SETTINGS','EOM EDIT LOG','STOCK CHANGE LOG'];
   if (systemSheets.includes(sheetName.toUpperCase())) return false;
 
-  if (isOwner_(userEmail)) return false;
+  if (isAuthorizedApprover_(userEmail)) return false;
 
   const authorizedUsers = usersForSheet_(sheetName);
   if (!authorizedUsers.map(u => u.toLowerCase()).includes(userEmail.toLowerCase())) {
@@ -44,7 +44,7 @@ function checkSheetPermission_(e) {
 }
 
 /**
- * Prevents non-owners from editing rows that are already marked as APPROVED.
+ * Prevents non-approvers from editing rows that are already marked as APPROVED.
  */
 function preventApprovedEdit_(e) {
   const sh = e.range.getSheet();
@@ -60,9 +60,9 @@ function preventApprovedEdit_(e) {
   if (status !== 'APPROVED') return false;
 
   const userEmail = Session.getActiveUser().getEmail();
-  if (!isOwner_(userEmail)) {
+  if (!isAuthorizedApprover_(userEmail)) {
     e.range.setValue(e.oldValue || '');
-    uiAlert_('Action Denied: This movement has already been APPROVED and is now locked. Only an Owner can modify it.');
+    uiAlert_('Action Denied: This movement has already been APPROVED and is now locked. Only MDs or Owners can modify it.');
     return true;
   }
   return false;
@@ -107,10 +107,14 @@ function findHeaderCol_(sheet, names, headerRows) {
   return null;
 }
 
-function isOwner_(email) {
+/**
+ * Checks if the user is an authorized approver (Owner, MD, or ALL access).
+ */
+function isAuthorizedApprover_(email) {
   const records = getAccessRecords_();
   const user = records.find(r => r.email.toLowerCase() === email.toLowerCase());
   if (!user) return false;
+  // CONFIG.OWNER_ROLES includes OWNER, MANAGING DIRECTOR, and MD
   return CONFIG.OWNER_ROLES.includes(user.role) || user.sheets.includes('ALL') || user.sheets.includes('OWNER SHEETS');
 }
 
@@ -124,9 +128,9 @@ function handleApprovalEdit_(e) {
   const status = key_(e.value);
   if (!['APPROVED','REJECTED','UNDER REVIEW','PENDING'].includes(status)) return;
 
-  if (!isOwner_(userEmail)) {
+  if (!isAuthorizedApprover_(userEmail)) {
     e.range.setValue(e.oldValue || '');
-    uiAlert_('Access Denied: Only Owners or MDs can approve or reject stock movements.');
+    uiAlert_('Access Denied: Only MDs or Owners can approve or reject stock movements.');
     return;
   }
 
@@ -223,10 +227,6 @@ function syncMasterPriceCostsFromApprovedMovements() {
   }
 }
 
-/**
- * Synchronizes approved quantities to departmental sheets.
- * SOLD/UTILIZED -> Sold, DAMAGED -> Damaged, ISSUED -> Issued, ADDED -> Added Stock.
- */
 function syncQuantitiesFromApprovedMovements() {
   const ss = SpreadsheetApp.getActive();
   const logSh = ss.getSheetByName('STOCK MOVEMENT APPROVAL LOG');
@@ -244,9 +244,7 @@ function syncQuantitiesFromApprovedMovements() {
   if (lastL <= lStatus.row) return;
 
   const lData = logSh.getRange(lStatus.row + 1, 1, lastL - lStatus.row, logSh.getLastColumn()).getValues();
-
-  // Aggregate movements by Department and Item Code
-  const aggregates = {}; // { Dept: { Code: { Sold: 0, Damaged: 0, Issued: 0, Added: 0 } } }
+  const aggregates = {};
 
   lData.forEach(row => {
     if (key_(row[lStatus.col - 1]) !== 'APPROVED') return;
