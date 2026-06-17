@@ -106,6 +106,40 @@ function setupSystemAccessDropdowns() {
   log_('SYSTEM_ACCESS', 'Dropdowns updated.');
 }
 
+function setupStockMovementDropdowns() {
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName('STOCK MOVEMENT APPROVAL LOG');
+  if (!sh) throw new Error('STOCK MOVEMENT APPROVAL LOG sheet not found.');
+
+  const deptCol = findHeaderCol_(sh, ['DEPARTMENT'], 10);
+  const typeCol = findHeaderCol_(sh, ['MOVEMENT TYPE'], 10);
+  const statusCol = findHeaderCol_(sh, ['STATUS'], 10);
+
+  if (!deptCol || !typeCol || !statusCol) throw new Error('Required headers not found in log sheet.');
+
+  const maxRows = Math.max(sh.getMaxRows() - statusCol.row, 1000);
+
+  const deptRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(CONFIG.DEPARTMENT_OPTIONS, true)
+    .setAllowInvalid(false)
+    .build();
+  const typeRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(CONFIG.MOVEMENT_TYPES, true)
+    .setAllowInvalid(false)
+    .build();
+  const statusRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['APPROVED','REJECTED','UNDER REVIEW','PENDING'], true)
+    .setAllowInvalid(false)
+    .build();
+
+  sh.getRange(statusCol.row + 1, deptCol.col, maxRows, 1).setDataValidation(deptRule);
+  sh.getRange(statusCol.row + 1, typeCol.col, maxRows, 1).setDataValidation(typeRule);
+  sh.getRange(statusCol.row + 1, statusCol.col, maxRows, 1).setDataValidation(statusRule);
+
+  log_('STOCK_MOVEMENT', 'Dropdowns updated in log sheet.');
+  uiAlert_('Stock Movement Approval Log dropdowns updated.');
+}
+
 function validateSystemAccess() {
   const sh = getSystemAccessSheet_(false);
   if (!sh) throw new Error('SYSTEM_ACCESS sheet is missing. Run Rebuild SYSTEM_ACCESS.');

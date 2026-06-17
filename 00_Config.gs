@@ -34,6 +34,16 @@ const CONFIG = {
     'DAMAGE REPORT','ISSUED STOCK REPORT','STAFF LIABILITY REPORT','STOCK AUDIT SUMMARY','FORMULA ERROR CHECK'
   ],
 
+  DEPARTMENT_OPTIONS: [
+    'CS MINI-MART','CS BAR','CS RESTAURANT','CS LAUNDRY','CS STORE','CS KITCHEN',
+    'M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','M.R KITCHEN U',
+    'Store: Housekeeping','Store: Reception','Store: Maintenance','Store: Kitchen','Store: Functionaries'
+  ],
+
+  MOVEMENT_TYPES: [
+    'SOLD','ISSUED','DAMAGED','UTILIZED','ADDED','OPENING'
+  ],
+
   GROUP_ALIASES: {
     'ALL': ['*'],
     'OWNER SHEETS': ['MASTER_PRICELIST','MASTER PRICE LIST','SYSTEM_ACCESS','SYSTEM_SETTINGS','SYSTEM_LOGS','EOM EDIT LOG','STOCK CHANGE LOG','STOCK AUDIT SUMMARY','AUDIT CHECK WEEK 1','AUDIT CHECK WEEK 2','AUDIT CHECK WEEK 3','AUDIT CHECK WEEK 4','AUDIT CHECK WEEK 5','ISSUED STOCK REPORT','DAMAGE REPORT','STAFF LIABILITY REPORT'],
@@ -105,6 +115,7 @@ function onOpen() {
     .addSubMenu(ui.createMenu('Menu 2: Access Control Carlisle EOM')
       .addItem('Rebuild SYSTEM_ACCESS', 'rebuildSystemAccess')
       .addItem('Setup SYSTEM_ACCESS Dropdowns', 'setupSystemAccessDropdowns')
+      .addItem('Setup Log Dropdowns', 'setupStockMovementDropdowns')
       .addItem('Validate SYSTEM_ACCESS', 'validateSystemAccess')
       .addItem('Sync User Permissions', 'syncUserPermissions_All'))
     .addSubMenu(ui.createMenu('Carlisle Reports')

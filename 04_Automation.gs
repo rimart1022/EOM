@@ -6,6 +6,10 @@
 function onEdit(e) {
   try {
     if (!e || !e.range) return;
+
+    // Prevent editing approved rows in STOCK MOVEMENT APPROVAL LOG
+    if (preventApprovedEdit_(e)) return;
+
     auditEdit_(e);
     handleApprovalEdit_(e);
     handleMasterPriceCostUpdate_(e);
@@ -13,6 +17,37 @@ function onEdit(e) {
   } catch (err) {
     log_('ON_EDIT_ERROR', err.message || err);
   }
+}
+
+/**
+ * Prevents non-owners from editing rows that are already marked as APPROVED.
+ */
+function preventApprovedEdit_(e) {
+  const sh = e.range.getSheet();
+  if (sh.getName() !== 'STOCK MOVEMENT APPROVAL LOG') return false;
+
+  const statusCell = findHeaderCol_(sh, ['STATUS'], 10);
+  if (!statusCell) return false;
+
+  const row = e.range.getRow();
+  if (row <= statusCell.row) return false;
+
+  // Get current status of the row
+  const status = key_(sh.getRange(row, statusCell.col).getValue());
+  if (status !== 'APPROVED') return false;
+
+  // If editing the status cell itself to change it FROM approved, allow ONLY if Owner
+  const userEmail = Session.getActiveUser().getEmail();
+  const isOwner = isOwner_(userEmail);
+
+  if (!isOwner) {
+    // Revert the change
+    e.range.setValue(e.oldValue || '');
+    uiAlert_('Action Denied: This movement has already been APPROVED and is now locked. Only an Owner can modify it.');
+    return true;
+  }
+
+  return false;
 }
 
 function auditEdit_(e) {
