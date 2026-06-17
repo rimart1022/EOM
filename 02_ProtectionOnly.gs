@@ -3,7 +3,7 @@
  - Protections do NOT sync staff permissions.
  - Use one sheet protection per sheet.
  - Reuses existing Carlisle protection instead of deleting/recreating.
- - Weekly can be run one sheet at a time to avoid timeout.
+ - Large groups can be run one sheet at a time to avoid timeout.
  - Does not write into merged cells.
  - EXCLUDES formula cells from cashier editable ranges.
 ****************************************************/
@@ -145,20 +145,11 @@ function editableRangesForSheet_(sheet) {
       addRange_(ranges, safeRangeRC_(sheet, 7, 5, maxRows - 6, 5)); // E7:I
     }
   } else if (isWeeklyMRSheet_(name)) {
-    // Name fields
     ['D2:H2','J2:N2','P2:T2','V2:Z2','AB2:AF2','AH2:AL2','AN2:AR2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
-
     const last = lastMeaningfulRow_(sheet, 8, 2);
     const numRows = Math.max(last - 7, 1);
-
-    // Cashier edits only sales columns: F, L, R, X, AD, AJ, AP
-    [6, 12, 18, 24, 30, 36, 42].forEach(col => {
-      addRange_(ranges, safeRangeRC_(sheet, 8, col, numRows, 1));
-    });
-
-    if (isWeekOneSheet_(name)) {
-      addRange_(ranges, safeRangeRC_(sheet, 8, 4, numRows, 1)); // D8:D (Opening Stock)
-    }
+    [6, 12, 18, 24, 30, 36, 42].forEach(col => { addRange_(ranges, safeRangeRC_(sheet, 8, col, numRows, 1)); });
+    if (isWeekOneSheet_(name)) { addRange_(ranges, safeRangeRC_(sheet, 8, 4, numRows, 1)); }
   } else if (name === 'M.R KITCHEN U') {
     ['A3:B3','D2:F2','J2:L2','P2:R2','V2:X2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
     const last = lastMeaningfulRow_(sheet, 8, 2);
@@ -179,11 +170,8 @@ function existingSheets_(names) {
 }
 
 function getOrCreateCarlisleProtection_(sheet) {
-  // To ensure full system management, clear ALL protections on the sheet first if requested.
-  // "all sheets should be managed by the system"
   sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => p.remove());
   sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(p => p.remove());
-
   const desc = 'Carlisle EOM protection - ' + sheet.getName();
   return sheet.protect().setDescription(desc);
 }
@@ -193,7 +181,6 @@ function protectSheetFast_(sheet) {
   p.setWarningOnly(false);
   p.setDescription('Carlisle EOM protection - ' + sheet.getName());
   p.setUnprotectedRanges(editableRangesForSheet_(sheet));
-  // Do not sync staff editors here. That is handled separately by Permission Sync.
   return sheet.getName();
 }
 
@@ -215,18 +202,14 @@ function protect_Expenses(){ protectSheetsFast_(protectionGroups_().EXPENSES, 'E
 function protect_StockMovement(){ protectSheetsFast_(protectionGroups_().STOCK_MOVEMENT, 'Stock Movement Approval Log'); }
 function protect_MRKitchenU(){ protectSheetsFast_(protectionGroups_().MR_KITCHEN_U, 'M.R Kitchen U'); }
 
-function resetAdminProtectionQueue() {
-  PropertiesService.getDocumentProperties().deleteProperty('ADMIN_PROTECT_INDEX');
-  uiAlert_('Owner/Admin protection queue reset. Run Protect Owner/Admin Sheets - Next Sheet.');
-}
-function protect_AdminSheets_Next() {
+function runQueueProtection_(queueName, groupName, label) {
   return protectionLock_(() => {
-    const names = protectionGroups_().ADMIN.slice();
+    const names = protectionGroups_()[groupName].slice();
     const props = PropertiesService.getDocumentProperties();
-    let idx = Number(props.getProperty('ADMIN_PROTECT_INDEX') || 0);
+    let idx = Number(props.getProperty(queueName) || 0);
     if (idx >= names.length) {
-      props.deleteProperty('ADMIN_PROTECT_INDEX');
-      uiAlert_('Owner/Admin protection queue already complete.');
+      props.deleteProperty(queueName);
+      uiAlert_(label + ' protection queue already complete.');
       return;
     }
     const ss = SpreadsheetApp.getActive();
@@ -236,25 +219,26 @@ function protect_AdminSheets_Next() {
       idx++;
       if (sh) { protectedName = protectSheetFast_(sh); break; }
     }
-    props.setProperty('ADMIN_PROTECT_INDEX', String(idx));
-    if (idx >= names.length) props.deleteProperty('ADMIN_PROTECT_INDEX');
-    log_('PROTECTION', 'Owner/Admin next sheet protected: ' + protectedName);
-    uiAlert_(protectedName ? ('Protected: ' + protectedName + '\nProgress: ' + idx + '/' + names.length) : 'No more Owner/Admin sheets found.');
+    props.setProperty(queueName, String(idx));
+    if (idx >= names.length) props.deleteProperty(queueName);
+    log_('PROTECTION', label + ' next sheet protected: ' + protectedName);
+    uiAlert_(protectedName ? ('Protected: ' + protectedName + '\nProgress: ' + idx + '/' + names.length) : 'No more sheets found.');
   });
 }
 
-// Backward-compatible old menu/function name. It protects ONE admin/system/log/report sheet per run, not the whole group.
-function protect_AdminSheets(){ protect_AdminSheets_Next(); }
-function protect_CSSheets(){ protectSheetsFast_(protectionGroups_().CS_SHEETS, 'CS Sheets', 2); }
+function protect_AdminSheets_Next() { runQueueProtection_('ADMIN_PROTECT_INDEX', 'ADMIN', 'Owner/Admin'); }
+function resetAdminProtectionQueue() { PropertiesService.getDocumentProperties().deleteProperty('ADMIN_PROTECT_INDEX'); uiAlert_('Admin queue reset.'); }
+
+function protect_CSSheets_Next() { runQueueProtection_('CS_PROTECT_INDEX', 'CS_SHEETS', 'CS Sheets'); }
+function resetCSSheetsProtectionQueue() { PropertiesService.getDocumentProperties().deleteProperty('CS_PROTECT_INDEX'); uiAlert_('CS Sheets queue reset.'); }
+
+function protect_CSSheets(){ protect_CSSheets_Next(); }
 
 function weeklyGroupsV13_() {
   return {
     WEEK1_2: ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','2 M.R MINI-MART','2 M.R BUSH BAR','2 M.R KITCHEN'],
     WEEK3_4: ['3 M.R MINI-MART','3 M.R BUSH BAR','3 M.R KITCHEN','4 M.R MINI-MART','4 M.R BUSH BAR','4 M.R KITCHEN'],
-    WEEK5: ['5 M.R MINI-MART','5 M.R BUSH BAR','5 M.R KITCHEN'],
-    MINIMART: ['M.R MINI-MART','2 M.R MINI-MART','3 M.R MINI-MART','4 M.R MINI-MART','5 M.R MINI-MART'],
-    BUSHBAR: ['M.R BUSH BAR','2 M.R BUSH BAR','3 M.R BUSH BAR','4 M.R BUSH BAR','5 M.R BUSH BAR'],
-    KITCHEN: ['M.R KITCHEN','2 M.R KITCHEN','3 M.R KITCHEN','4 M.R KITCHEN','5 M.R KITCHEN']
+    WEEK5: ['5 M.R MINI-MART','5 M.R BUSH BAR','5 M.R KITCHEN']
   };
 }
 
@@ -272,33 +256,8 @@ function protect_ActiveSheetOnly() {
   });
 }
 
-function resetWeeklyProtectionQueue() {
-  PropertiesService.getDocumentProperties().deleteProperty('WEEKLY_PROTECT_INDEX');
-  uiAlert_('Weekly protection queue reset.');
-}
-function protect_Weekly_NextSheet() {
-  return protectionLock_(() => {
-    const names = protectionGroups_().WEEKLY_MR.slice();
-    const props = PropertiesService.getDocumentProperties();
-    let idx = Number(props.getProperty('WEEKLY_PROTECT_INDEX') || 0);
-    if (idx >= names.length) {
-      props.deleteProperty('WEEKLY_PROTECT_INDEX');
-      uiAlert_('Weekly protection queue already complete.');
-      return;
-    }
-    const ss = SpreadsheetApp.getActive();
-    let protectedName = null;
-    while (idx < names.length) {
-      const sh = ss.getSheetByName(names[idx]);
-      idx++;
-      if (sh) { protectedName = protectSheetFast_(sh); break; }
-    }
-    props.setProperty('WEEKLY_PROTECT_INDEX', String(idx));
-    if (idx >= names.length) props.deleteProperty('WEEKLY_PROTECT_INDEX');
-    log_('PROTECTION', 'Weekly next sheet protected: ' + protectedName);
-    uiAlert_(protectedName ? ('Protected: ' + protectedName + '\nProgress: ' + idx + '/' + names.length) : 'No more weekly sheets found.');
-  });
-}
+function resetWeeklyProtectionQueue() { PropertiesService.getDocumentProperties().deleteProperty('WEEKLY_PROTECT_INDEX'); uiAlert_('Weekly queue reset.'); }
+function protect_Weekly_NextSheet() { runQueueProtection_('WEEKLY_PROTECT_INDEX', 'WEEKLY_MR', 'Weekly M.R'); }
 
 function clearCarlisleProtections() {
   const ss = SpreadsheetApp.getActive();

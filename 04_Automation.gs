@@ -83,21 +83,19 @@ function handleApprovalEdit_(e) {
   const approvedDate = findHeaderCol_(sh, ['APPROVAL DATE','APPROVED DATE'], 10);
   if (approvedBy) sh.getRange(e.range.getRow(), approvedBy.col).setValue(userEmail);
   if (approvedDate) sh.getRange(e.range.getRow(), approvedDate.col).setValue(new Date());
+
+  // Trigger cost sync immediately on approval
+  if (status === 'APPROVED') syncMasterPriceCostsFromApprovedMovements();
 }
 
 function handleMasterPriceCostUpdate_(e) {
   const sheetName = e.range.getSheet().getName();
-  if (!['PURCHASES','STOCK MOVEMENT APPROVAL LOG'].includes(sheetName)) return;
+  if (sheetName !== 'PURCHASES') return;
 
-  let isCostCol = false;
-  if (sheetName === 'PURCHASES' && e.range.getColumn() === 11) { // Column K
-    isCostCol = true;
-  } else {
-    const header = findHeaderCol_(e.range.getSheet(), ['UNIT COST','COST PRICE','UNIT VALUE','PURCHASE UNIT PRICE'], 10);
-    if (header && e.range.getColumn() === header.col) isCostCol = true;
+  // Update on Column K edits in Purchases
+  if (e.range.getColumn() === 11 && e.range.getRow() >= 5) {
+    syncMasterPriceCostsFromApprovedMovements();
   }
-
-  if (isCostCol) syncMasterPriceCostsFromApprovedMovements();
 }
 
 function syncMasterPriceCostsFromApprovedMovements() {
@@ -105,8 +103,8 @@ function syncMasterPriceCostsFromApprovedMovements() {
   const master = ss.getSheetByName(CONFIG.MASTER_PRICE_LIST) || ss.getSheetByName('MASTER PRICE LIST');
   if (!master) throw new Error('MASTER_PRICELIST not found.');
 
-  const mCode = findHeaderCol_(master, ['ITEM CODE','CODE'], 10) || {row: 1, col: 1};
-  // Explicitly target Column C (3) or search for Cost header
+  // Column B (2) is Code, Column C (3) is Cost Price
+  const mCode = findHeaderCol_(master, ['ITEM CODE','CODE'], 10) || {row: 1, col: 2};
   const mCost = findHeaderCol_(master, ['COST PRICE','UNIT COST','COST'], 10) || {row: 1, col: 3};
 
   const codeToRow = {};
@@ -117,35 +115,61 @@ function syncMasterPriceCostsFromApprovedMovements() {
   }
 
   let updates = 0;
-  ['PURCHASES','STOCK MOVEMENT APPROVAL LOG'].forEach(sheetName => {
-    const sh = ss.getSheetByName(sheetName);
-    if (!sh) return;
-    const codeCol = findHeaderCol_(sh, ['ITEM CODE','CODE'], 10) || {row: 1, col: (sheetName === 'PURCHASES' ? 2 : 1)};
-    // Explicitly target Purchases K (11) if header not found
-    const costCol = findHeaderCol_(sh, ['UNIT COST','COST PRICE','UNIT VALUE','PURCHASE UNIT PRICE'], 10) || {row: 1, col: (sheetName === 'PURCHASES' ? 11 : 1)};
-    const statusCol = findHeaderCol_(sh, ['STATUS'], 10);
 
-    const start = Math.max(codeCol.row, costCol.row, statusCol ? statusCol.row : 1) + 1;
-    for (let r = start; r <= sh.getLastRow(); r++) {
-      const status = statusCol ? key_(sh.getRange(r, statusCol.col).getValue()) : 'APPROVED';
-      if (status === 'REJECTED') continue;
+  // 1. Sync from PURCHASES (K -> C)
+  const pSh = ss.getSheetByName('PURCHASES');
+  if (pSh) {
+    const pCodeCol = findHeaderCol_(pSh, ['ITEM CODE','CODE'], 10) || {row: 1, col: 2};
+    const pCostCol = {row: 1, col: 11}; // Explicitly K
+    const lastP = pSh.getLastRow();
+    if (lastP > 4) {
+      const pData = pSh.getRange(5, 1, lastP - 4, 11).getValues();
+      pData.forEach(row => {
+        const code = String(row[pCodeCol.col - 1] || '').trim();
+        const cost = row[10]; // Column K
+        if (code && codeToRow[code] && cost !== '' && !isNaN(Number(cost))) {
+          const mRow = codeToRow[code];
+          const current = master.getRange(mRow, mCost.col).getValue();
+          if (Number(current) !== Number(cost)) {
+            master.getRange(mRow, mCost.col).setValue(Number(cost));
+            updates++;
+          }
+        }
+      });
+    }
+  }
 
-      const code = String(sh.getRange(r, codeCol.col).getValue() || '').trim();
-      const cost = sh.getRange(r, costCol.col).getValue();
-      if (!code || cost === '' || isNaN(Number(cost))) continue;
-
-      const mRow = codeToRow[code];
-      if (!mRow) continue;
-
-      const current = master.getRange(mRow, mCost.col).getValue();
-      if (Number(current) !== Number(cost)) {
-        master.getRange(mRow, mCost.col).setValue(Number(cost));
-        updates++;
+  // 2. Sync from APPROVED Stock Movement Log
+  const logSh = ss.getSheetByName('STOCK MOVEMENT APPROVAL LOG');
+  if (logSh) {
+    const lCodeCol = findHeaderCol_(logSh, ['ITEM CODE','CODE'], 10);
+    const lCostCol = findHeaderCol_(logSh, ['UNIT COST','COST PRICE','UNIT VALUE','PURCHASE UNIT PRICE'], 10);
+    const lStatusCol = findHeaderCol_(logSh, ['STATUS'], 10);
+    if (lCodeCol && lCostCol && lStatusCol) {
+      const lastL = logSh.getLastRow();
+      if (lastL > lStatusCol.row) {
+        const lData = logSh.getRange(lStatusCol.row + 1, 1, lastL - lStatusCol.row, logSh.getLastColumn()).getValues();
+        lData.forEach(row => {
+          const status = key_(row[lStatusCol.col - 1]);
+          if (status === 'APPROVED') {
+            const code = String(row[lCodeCol.col - 1] || '').trim();
+            const cost = row[lCostCol.col - 1];
+            if (code && codeToRow[code] && cost !== '' && !isNaN(Number(cost))) {
+              const mRow = codeToRow[code];
+              const current = master.getRange(mRow, mCost.col).getValue();
+              if (Number(current) !== Number(cost)) {
+                master.getRange(mRow, mCost.col).setValue(Number(cost));
+                updates++;
+              }
+            }
+          }
+        });
       }
     }
-  });
+  }
+
   log_('MASTER_PRICE_SYNC', 'Updated cost prices: ' + updates);
-  uiAlert_('Master Price List cost sync complete. Updates made: ' + updates);
+  if (updates > 0) uiAlert_('Master Price List cost sync complete. Updates made: ' + updates);
 }
 
 function syncMasterPriceItemsFromDepartments() {

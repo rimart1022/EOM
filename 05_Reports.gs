@@ -73,7 +73,7 @@ function generateStockAuditSummary() {
     const last = s.getLastRow();
     if (last < 5) return;
     const values = s.getRange(1, 1, last, s.getLastColumn()).getValues();
-    // Generic scan: include visible rows with item/code in first columns and any non-zero variance-like last columns.
+    // Heuristic scan: include rows with item/code and any numeric data
     for (let r = 4; r < values.length; r++) {
       const row = values[r];
       if (!row[0] && !row[1]) continue;

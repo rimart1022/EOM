@@ -41,7 +41,7 @@ const CONFIG = {
     'SYSTEM SHEETS': ['SYSTEM_ACCESS','SYSTEM_SETTINGS','SYSTEM_LOGS'],
     'LOG SHEETS': ['SYSTEM_LOGS','EOM EDIT LOG','STOCK CHANGE LOG'],
     'REPORT SHEETS': ['STOCK AUDIT SUMMARY','AUDIT CHECK WEEK 1','AUDIT CHECK WEEK 2','AUDIT CHECK WEEK 3','AUDIT CHECK WEEK 4','AUDIT CHECK WEEK 5','ISSUED STOCK REPORT','DAMAGE REPORT','STAFF LIABILITY REPORT'],
-    'REPORTS': ['DAMAGE REPORT','ISSUED STOCK REPORT','STAFF LIABILITY REPORT','STOCK AUDIT SUMMARY','FORMULA ERROR CHECK'],
+    'REPORTS': ['DAMAGE REPORT','ISSUED STOCK REPORT','STAFF LIABILITY REPORT','STOCK AUDIT SUMMARY','FORMULA ERROR CHECK','AUDIT CHECK WEEK 1','AUDIT CHECK WEEK 2','AUDIT CHECK WEEK 3','AUDIT CHECK WEEK 4','AUDIT CHECK WEEK 5'],
     'PURCHASES': ['PURCHASES'],
     'DAILY SALES': ['DAILY SALES'],
     'DAILY SALES BREAKDOWN': ['DAILY SALES BREAKDOWN'],
@@ -82,7 +82,7 @@ const CONFIG = {
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('Carlisle EOM')
-    .addSubMenu(ui.createMenu('Menu 1: Protections')
+    .addSubMenu(ui.createMenu('Menu 1: Protections Carlisle EOM')
       .addItem('Protect Purchases', 'protect_Purchases')
       .addItem('Protect Daily Sales', 'protect_DailySales')
       .addItem('Protect Daily Sales Breakdown', 'protect_DailySalesBreakdown')
@@ -98,8 +98,10 @@ function onOpen() {
       .addSeparator()
       .addItem('Clear All Protections', 'clearCarlisleProtections')
       .addSeparator()
-      .addItem('Reset Admin Protection Queue', 'resetAdminProtectionQueue'))
-    .addSubMenu(ui.createMenu('Menu 2: Access Control')
+      .addItem('Reset Admin Protection Queue', 'resetAdminProtectionQueue')
+      .addItem('Reset CS Sheets Protection Queue', 'resetCSSheetsProtectionQueue')
+      .addItem('Reset Weekly Protection Queue', 'resetWeeklyProtectionQueue'))
+    .addSubMenu(ui.createMenu('Menu 2: Access Control Carlisle EOM')
       .addItem('Rebuild SYSTEM_ACCESS', 'rebuildSystemAccess')
       .addItem('Setup SYSTEM_ACCESS Dropdowns', 'setupSystemAccessDropdowns')
       .addItem('Validate SYSTEM_ACCESS', 'validateSystemAccess')
