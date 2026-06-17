@@ -145,11 +145,17 @@ function editableRangesForSheet_(sheet) {
       addRange_(ranges, safeRangeRC_(sheet, 7, 5, maxRows - 6, 5)); // E7:I
     }
   } else if (isWeeklyMRSheet_(name)) {
+    // Basic headers for all weeks
+    addRange_(ranges, safeRangeA1_(sheet, 'A3:B3'));
     ['D2:H2','J2:N2','P2:T2','V2:Z2','AB2:AF2','AH2:AL2','AN2:AR2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
-    const last = lastMeaningfulRow_(sheet, 8, 2);
-    const numRows = Math.max(last - 7, 1);
-    [6, 12, 18, 24, 30, 36, 42].forEach(col => { addRange_(ranges, safeRangeRC_(sheet, 8, col, numRows, 1)); });
-    if (isWeekOneSheet_(name)) { addRange_(ranges, safeRangeRC_(sheet, 8, 4, numRows, 1)); }
+
+    // Only Week 1 has Opening Stock editable by cashier
+    if (isWeekOneSheet_(name)) {
+      const last = lastMeaningfulRow_(sheet, 8, 2);
+      const numRows = Math.max(last - 7, 1);
+      addRange_(ranges, safeRangeRC_(sheet, 8, 4, numRows, 1)); // D8:D (Opening Stock)
+    }
+    // Sales, Added Stock, physical count etc. are locked for Weekly Sheets.
   } else if (name === 'M.R KITCHEN U') {
     ['A3:B3','D2:F2','J2:L2','P2:R2','V2:X2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
     const last = lastMeaningfulRow_(sheet, 8, 2);
