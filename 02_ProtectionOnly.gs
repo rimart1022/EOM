@@ -107,6 +107,18 @@ function addRange_(arr, range) {
   pruned.forEach(r => arr.push(r));
 }
 
+function lastMeaningfulRow_(sheet, startRow, keyCol) {
+  const max = sheet.getMaxRows();
+  if (max < startRow) return startRow - 1;
+  const numRows = max - startRow + 1;
+  const vals = sheet.getRange(startRow, keyCol, numRows, 1).getDisplayValues();
+  let last = startRow - 1;
+  for (let i = vals.length - 1; i >= 0; i--) {
+    if (String(vals[i][0] || '').trim() !== '') { last = startRow + i; break; }
+  }
+  return Math.max(last, startRow);
+}
+
 function isWeekOneSheet_(name) {
   const n = key_(name);
   return n === 'M.R MINI-MART' || n === 'M.R BUSH BAR' || n === 'M.R KITCHEN';
@@ -271,7 +283,7 @@ function resetAdminProtectionQueue() { PropertiesService.getDocumentProperties()
 function protect_CSSheets_Next() { runQueueProtection_('CS_PROTECT_INDEX', 'CS_SHEETS', 'CS Sheets'); }
 function resetCSSheetsProtectionQueue() { PropertiesService.getDocumentProperties().deleteProperty('CS_PROTECT_INDEX'); uiAlert_('CS Sheets queue reset.'); }
 
-function protect_CSSheets(){ protect_CSSheets_Next(); }
+function protect_CSSheets(){ protectSheetsFast_(protectionGroups_().CS_SHEETS, 'CS Sheets'); }
 
 function weeklyGroupsV13_() {
   return {

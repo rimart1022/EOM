@@ -28,14 +28,22 @@ function onEdit(e) {
 function checkSheetPermission_(e) {
   const userEmail = Session.getActiveUser().getEmail();
   const sheetName = e.range.getSheet().getName();
+
+  // Basic exclusion for system sheets that are already Owner-only protected
+  const systemSheets = ['SYSTEM_ACCESS','SYSTEM_LOGS','SYSTEM_SETTINGS','EOM EDIT LOG','STOCK CHANGE LOG'];
+  if (systemSheets.includes(sheetName.toUpperCase())) return false;
+
+  // Owners always have permission
   if (isOwner_(userEmail)) return false;
 
+  // Check if the user is authorized for this sheet
   const authorizedUsers = usersForSheet_(sheetName);
   if (!authorizedUsers.map(u => u.toLowerCase()).includes(userEmail.toLowerCase())) {
     e.range.setValue(e.oldValue || '');
     uiAlert_('Access Denied: You are not assigned to control the sheet "' + sheetName + '" in SYSTEM_ACCESS.');
     return true;
   }
+
   return false;
 }
 
@@ -52,6 +60,7 @@ function preventApprovedEdit_(e) {
   const row = e.range.getRow();
   if (row <= statusCell.row) return false;
 
+  // Get current status of the row
   const status = key_(sh.getRange(row, statusCell.col).getValue());
   if (status !== 'APPROVED') return false;
 
@@ -61,6 +70,7 @@ function preventApprovedEdit_(e) {
     uiAlert_('Action Denied: This movement has already been APPROVED and is now locked. Only an Owner can modify it.');
     return true;
   }
+
   return false;
 }
 
