@@ -87,6 +87,7 @@ function onOpen() {
       .addItem('Protect Daily Sales', 'protect_DailySales')
       .addItem('Protect Daily Sales Breakdown', 'protect_DailySalesBreakdown')
       .addItem('Protect Expenses', 'protect_Expenses')
+      .addItem('Protect Stock Movement Approval Log', 'protect_StockMovement')
       .addSeparator()
       .addItem('Protect Weekly M.R Weeks 1-2', 'protect_Weekly_Weeks1_2')
       .addItem('Protect Weekly M.R Weeks 3-4', 'protect_Weekly_Weeks3_4')
