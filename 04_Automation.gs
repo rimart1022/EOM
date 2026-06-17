@@ -104,7 +104,6 @@ function syncMasterPriceCostsFromApprovedMovements() {
   const lastM = master.getLastRow();
   if (lastM <= mCodeHeader.row) return;
 
-  // Batch read Master Price List
   const mData = master.getRange(mCodeHeader.row + 1, 1, lastM - mCodeHeader.row, master.getLastColumn()).getValues();
   const codeToIdx = {};
   mData.forEach((row, i) => {
@@ -113,8 +112,6 @@ function syncMasterPriceCostsFromApprovedMovements() {
   });
 
   let updates = 0;
-
-  // 1. Sync from PURCHASES (K -> C)
   const pSh = ss.getSheetByName('PURCHASES');
   if (pSh) {
     const pCodeHeader = findHeaderCol_(pSh, ['ITEM CODE','CODE'], 10) || {row: 1, col: 2};
@@ -135,7 +132,6 @@ function syncMasterPriceCostsFromApprovedMovements() {
     }
   }
 
-  // 2. Sync from APPROVED Stock Movement Log
   const logSh = ss.getSheetByName('STOCK MOVEMENT APPROVAL LOG');
   if (logSh) {
     const lCode = findHeaderCol_(logSh, ['ITEM CODE','CODE'], 10);
@@ -162,7 +158,6 @@ function syncMasterPriceCostsFromApprovedMovements() {
     }
   }
 
-  // Batch commit updates
   if (updates > 0) {
     const outRange = master.getRange(mCodeHeader.row + 1, mCostHeader.col, mData.length, 1);
     const outValues = mData.map(r => [r[mCostHeader.col - 1]]);
