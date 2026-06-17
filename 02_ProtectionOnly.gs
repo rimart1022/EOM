@@ -13,7 +13,7 @@ function protectionGroups_() {
     DAILY_SALES_BREAKDOWN: ['DAILY SALES BREAKDOWN'],
     EXPENSES: ['EXPENSES'],
     STOCK_MOVEMENT: ['STOCK MOVEMENT APPROVAL LOG'],
-    CS_SHEETS: ['CS MINI-MART','CS LAUNDRY','CS BAR','CS RESTAURANT','CS STORE','CS KITCHEN'],
+    CS_SHEETS: ['CS STORE','CS MINI-MART','CS RESTAURANT','CS LAUNDRY','CS BAR','CS KITCHEN'],
     WEEKLY_MR: ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','2 M.R MINI-MART','2 M.R BUSH BAR','2 M.R KITCHEN','3 M.R MINI-MART','3 M.R BUSH BAR','3 M.R KITCHEN','4 M.R MINI-MART','4 M.R BUSH BAR','4 M.R KITCHEN','5 M.R MINI-MART','5 M.R BUSH BAR','5 M.R KITCHEN'],
     MR_KITCHEN_U: ['M.R KITCHEN U'],
     ADMIN: ['MASTER_PRICELIST','MASTER PRICE LIST','SYSTEM_ACCESS','SYSTEM_SETTINGS','SYSTEM_LOGS','EOM EDIT LOG','STOCK CHANGE LOG','STOCK AUDIT SUMMARY','AUDIT CHECK WEEK 1','AUDIT CHECK WEEK 2','AUDIT CHECK WEEK 3','AUDIT CHECK WEEK 4','AUDIT CHECK WEEK 5','ISSUED STOCK REPORT','DAMAGE REPORT','STAFF LIABILITY REPORT'],
@@ -71,10 +71,6 @@ function safeRangeRC_(sheet, row, col, rows, cols) {
   } catch (e) { return null; }
 }
 
-/**
- * Optimized pruneFormulas to consolidate contiguous unprotected ranges.
- * This stays under the 50-unprotected-range limit in Google Sheets.
- */
 function pruneFormulas_(range) {
   if (!range) return [];
   const sheet = range.getSheet();
@@ -240,16 +236,14 @@ function protectSheetFast_(sheet) {
   p.setWarningOnly(false);
   const unprotected = editableRangesForSheet_(sheet);
   if (unprotected.length) {
-    // Google Sheets has a limit of 50 unprotected ranges per sheet protection.
-    // Our consolidated pruneFormulas_ helps keep this count low.
     p.setUnprotectedRanges(unprotected.slice(0, 50));
   }
   return sheet.getName();
 }
 
-function protectSheetsFast_(sheetNames, label, maxSheetsPerRun) {
+function protectSheetsFast_(sheetNames, label) {
   return protectionLock_(() => {
-    const sheets = existingSheets_(sheetNames).slice(0, maxSheetsPerRun || sheetNames.length);
+    const sheets = existingSheets_(sheetNames);
     if (!sheets.length) throw new Error('No matching sheets found for group: ' + label);
     const done = [];
     sheets.forEach(s => done.push(protectSheetFast_(s)));
@@ -293,10 +287,7 @@ function protect_MRKitchenU(){ protectSheetsFast_(protectionGroups_().MR_KITCHEN
 function protect_AdminSheets_Next() { runQueueProtection_('ADMIN_PROTECT_INDEX', 'ADMIN', 'Owner/Admin'); }
 function resetAdminProtectionQueue() { PropertiesService.getDocumentProperties().deleteProperty('ADMIN_PROTECT_INDEX'); uiAlert_('Admin queue reset.'); }
 
-function protect_CSSheets_Next() { runQueueProtection_('CS_PROTECT_INDEX', 'CS_SHEETS', 'CS Sheets'); }
-function resetCSSheetsProtectionQueue() { PropertiesService.getDocumentProperties().deleteProperty('CS_PROTECT_INDEX'); uiAlert_('CS Sheets queue reset.'); }
-
-function protect_CSSheets(){ protectSheetsFast_(protectionGroups_().CS_SHEETS, 'CS Sheets', 2); }
+function protect_CSSheets(){ protectSheetsFast_(protectionGroups_().CS_SHEETS, 'CS Sheets'); }
 
 function weeklyGroupsV13_() {
   return {
