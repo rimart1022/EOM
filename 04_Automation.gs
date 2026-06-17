@@ -155,3 +155,47 @@ function syncMasterPriceCostsFromApprovedMovements() {
   log_('MASTER_PRICE_SYNC', 'Updated cost prices: ' + updates);
   uiAlert_('Master Price List cost sync complete. Updates made: ' + updates);
 }
+
+function syncMasterPriceItemsFromDepartments() {
+  const ss = SpreadsheetApp.getActive();
+  const master = ss.getSheetByName(CONFIG.MASTER_PRICE_LIST) || ss.getSheetByName('MASTER PRICE LIST');
+  if (!master) throw new Error('MASTER_PRICELIST not found.');
+
+  const mCode = findHeaderCol_(master, ['ITEM CODE','CODE'], 10) || {row: 1, col: 1};
+  const mItem = findHeaderCol_(master, ['ITEM','DESCRIPTION','PRODUCT'], 10) || {row: 1, col: 2};
+
+  const existingCodes = new Set();
+  const lastM = master.getLastRow();
+  if (lastM > mCode.row) {
+    master.getRange(mCode.row + 1, mCode.col, lastM - mCode.row, 1).getValues().forEach(v => {
+      if (v[0]) existingCodes.add(String(v[0]).trim());
+    });
+  }
+
+  let newItems = 0;
+  // Sync from CS Sheets and Weekly M.R Sheets
+  const sheetsToSync = ss.getSheets().filter(sh => isCSSheet_(sh.getName()) || isWeeklyMRSheet_(sh.getName()));
+
+  sheetsToSync.forEach(sh => {
+    const codeCol = findHeaderCol_(sh, ['ITEM CODE','CODE'], 10);
+    const itemCol = findHeaderCol_(sh, ['ITEM','DESCRIPTION'], 10);
+    if (!codeCol || !itemCol) return;
+
+    const lastRow = sh.getLastRow();
+    if (lastRow <= codeCol.row) return;
+
+    const data = sh.getRange(codeCol.row + 1, 1, lastRow - codeCol.row, sh.getLastColumn()).getValues();
+    data.forEach(row => {
+      const code = String(row[codeCol.col - 1] || '').trim();
+      const item = String(row[itemCol.col - 1] || '').trim();
+      if (code && !existingCodes.has(code)) {
+        master.appendRow(['', code, item]); // Minimal entry
+        existingCodes.add(code);
+        newItems++;
+      }
+    });
+  });
+
+  log_('MASTER_PRICE_ITEM_SYNC', 'New items added to Master Price List: ' + newItems);
+  uiAlert_('Master Price List item sync complete. New items added: ' + newItems);
+}

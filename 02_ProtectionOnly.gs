@@ -179,12 +179,12 @@ function existingSheets_(names) {
 }
 
 function getOrCreateCarlisleProtection_(sheet) {
+  // To ensure full system management, clear ALL protections on the sheet first if requested.
+  // "all sheets should be managed by the system"
+  sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => p.remove());
+  sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(p => p.remove());
+
   const desc = 'Carlisle EOM protection - ' + sheet.getName();
-  const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)
-    .filter(p => String(p.getDescription() || '') === desc);
-  // Remove duplicate Carlisle protections on THIS sheet only.
-  for (let i = 1; i < protections.length; i++) protections[i].remove();
-  if (protections[0]) return protections[0];
   return sheet.protect().setDescription(desc);
 }
 
