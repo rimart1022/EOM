@@ -25,6 +25,7 @@ const CONFIG = {
   // These are options that can be typed or selected in SYSTEM_ACCESS > Sheets Controlled.
   SHEET_CONTROL_OPTIONS: [
     'ALL','OWNER SHEETS','ADMIN SHEETS','SYSTEM SHEETS','LOG SHEETS','REPORT SHEETS','REPORTS','CS SHEETS','ALL CS SHEETS','WEEKLY M.R SHEETS',
+    'WEEKLY M.R WEEK 1-2','WEEKLY M.R WEEK 3-4','WEEKLY M.R WEEK 5',
     'PURCHASES','DAILY SALES','DAILY SALES BREAKDOWN','EXPENSES','STOCK MOVEMENT APPROVAL LOG',
     'CS MINI-MART','CS BAR','CS RESTAURANT','CS LAUNDRY','CS STORE','CS KITCHEN',
     'M.R MINI-MART 1-5','M.R BUSH BAR 1-5','M.R KITCHEN 1-5',
@@ -56,6 +57,9 @@ const CONFIG = {
     'CS STORE': ['CS STORE'],
     'CS KITCHEN': ['CS KITCHEN'],
     'WEEKLY M.R SHEETS': ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','2 M.R MINI-MART','3 M.R MINI-MART','4 M.R MINI-MART','5 M.R MINI-MART','2 M.R BUSH BAR','3 M.R BUSH BAR','4 M.R BUSH BAR','5 M.R BUSH BAR','2 M.R KITCHEN','3 M.R KITCHEN','4 M.R KITCHEN','5 M.R KITCHEN'],
+    'WEEKLY M.R WEEK 1-2': ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','2 M.R MINI-MART','2 M.R BUSH BAR','2 M.R KITCHEN'],
+    'WEEKLY M.R WEEK 3-4': ['3 M.R MINI-MART','3 M.R BUSH BAR','3 M.R KITCHEN','4 M.R MINI-MART','4 M.R BUSH BAR','4 M.R KITCHEN'],
+    'WEEKLY M.R WEEK 5': ['5 M.R MINI-MART','5 M.R BUSH BAR','5 M.R KITCHEN'],
     'M.R MINI-MART 1-5': ['M.R MINI-MART','2 M.R MINI-MART','3 M.R MINI-MART','4 M.R MINI-MART','5 M.R MINI-MART'],
     'M.R BUSH BAR 1-5': ['M.R BUSH BAR','2 M.R BUSH BAR','3 M.R BUSH BAR','4 M.R BUSH BAR','5 M.R BUSH BAR'],
     'M.R KITCHEN 1-5': ['M.R KITCHEN','2 M.R KITCHEN','3 M.R KITCHEN','4 M.R KITCHEN','5 M.R KITCHEN'],
@@ -83,14 +87,17 @@ function onOpen() {
       .addItem('Protect Daily Sales', 'protect_DailySales')
       .addItem('Protect Daily Sales Breakdown', 'protect_DailySalesBreakdown')
       .addItem('Protect Expenses', 'protect_Expenses')
-      .addItem('Protect Weekly M.R Sheets', 'protect_Weekly_NextSheet')
+      .addSeparator()
+      .addItem('Protect Weekly M.R Weeks 1-2', 'protect_Weekly_Weeks1_2')
+      .addItem('Protect Weekly M.R Weeks 3-4', 'protect_Weekly_Weeks3_4')
+      .addItem('Protect Weekly M.R Week 5', 'protect_Weekly_Week5')
       .addItem('Protect M.R Kitchen U', 'protect_MRKitchenU')
+      .addSeparator()
       .addItem('Protect CS Sheets', 'protect_CSSheets')
       .addItem('Protect Admin Sheets', 'protect_AdminSheets_Next')
       .addSeparator()
       .addItem('Clear All Protections', 'clearCarlisleProtections')
       .addSeparator()
-      .addItem('Reset Weekly Protection Queue', 'resetWeeklyProtectionQueue')
       .addItem('Reset Admin Protection Queue', 'resetAdminProtectionQueue'))
     .addSubMenu(ui.createMenu('Menu 2: Access Control')
       .addItem('Rebuild SYSTEM_ACCESS', 'rebuildSystemAccess')

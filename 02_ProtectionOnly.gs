@@ -214,10 +214,6 @@ function protect_DailySalesBreakdown(){ protectSheetsFast_(protectionGroups_().D
 function protect_Expenses(){ protectSheetsFast_(protectionGroups_().EXPENSES, 'Expenses'); }
 function protect_StockMovement(){ protectSheetsFast_(protectionGroups_().STOCK_MOVEMENT, 'Stock Movement Approval Log'); }
 function protect_MRKitchenU(){ protectSheetsFast_(protectionGroups_().MR_KITCHEN_U, 'M.R Kitchen U'); }
-function protect_SystemSheets(){ protectSheetsFast_(protectionGroups_().SYSTEM, 'System Sheets', 1); }
-function protect_LogSheets(){ protectSheetsFast_(protectionGroups_().LOGS, 'Log Sheets', 1); }
-function protect_ReportSheets(){ protectSheetsFast_(protectionGroups_().REPORTS, 'Report Sheets', 1); }
-function protect_MasterPriceList(){ protectSheetsFast_(protectionGroups_().MASTER_PRICE, 'Master Pricelist', 1); }
 
 function resetAdminProtectionQueue() {
   PropertiesService.getDocumentProperties().deleteProperty('ADMIN_PROTECT_INDEX');
@@ -253,10 +249,8 @@ function protect_CSSheets(){ protectSheetsFast_(protectionGroups_().CS_SHEETS, '
 
 function weeklyGroupsV13_() {
   return {
-    WEEK1: ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN'],
-    WEEK2: ['2 M.R MINI-MART','2 M.R BUSH BAR','2 M.R KITCHEN'],
-    WEEK3: ['3 M.R MINI-MART','3 M.R BUSH BAR','3 M.R KITCHEN'],
-    WEEK4: ['4 M.R MINI-MART','4 M.R BUSH BAR','4 M.R KITCHEN'],
+    WEEK1_2: ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','2 M.R MINI-MART','2 M.R BUSH BAR','2 M.R KITCHEN'],
+    WEEK3_4: ['3 M.R MINI-MART','3 M.R BUSH BAR','3 M.R KITCHEN','4 M.R MINI-MART','4 M.R BUSH BAR','4 M.R KITCHEN'],
     WEEK5: ['5 M.R MINI-MART','5 M.R BUSH BAR','5 M.R KITCHEN'],
     MINIMART: ['M.R MINI-MART','2 M.R MINI-MART','3 M.R MINI-MART','4 M.R MINI-MART','5 M.R MINI-MART'],
     BUSHBAR: ['M.R BUSH BAR','2 M.R BUSH BAR','3 M.R BUSH BAR','4 M.R BUSH BAR','5 M.R BUSH BAR'],
@@ -264,14 +258,9 @@ function weeklyGroupsV13_() {
   };
 }
 
-function protect_Weekly_Week1(){ protectSheetsFast_(weeklyGroupsV13_().WEEK1, 'Weekly M.R - Week 1', 1); }
-function protect_Weekly_Week2(){ protectSheetsFast_(weeklyGroupsV13_().WEEK2, 'Weekly M.R - Week 2', 1); }
-function protect_Weekly_Week3(){ protectSheetsFast_(weeklyGroupsV13_().WEEK3, 'Weekly M.R - Week 3', 1); }
-function protect_Weekly_Week4(){ protectSheetsFast_(weeklyGroupsV13_().WEEK4, 'Weekly M.R - Week 4', 1); }
-function protect_Weekly_Week5(){ protectSheetsFast_(weeklyGroupsV13_().WEEK5, 'Weekly M.R - Week 5', 1); }
-function protect_Weekly_MiniMart(){ protectSheetsFast_(weeklyGroupsV13_().MINIMART, 'Weekly M.R - Mini-Mart', 1); }
-function protect_Weekly_BushBar(){ protectSheetsFast_(weeklyGroupsV13_().BUSHBAR, 'Weekly M.R - Bush Bar', 1); }
-function protect_Weekly_Kitchen(){ protectSheetsFast_(weeklyGroupsV13_().KITCHEN, 'Weekly M.R - Kitchen', 1); }
+function protect_Weekly_Weeks1_2(){ protectSheetsFast_(weeklyGroupsV13_().WEEK1_2, 'Weekly M.R - Weeks 1-2'); }
+function protect_Weekly_Weeks3_4(){ protectSheetsFast_(weeklyGroupsV13_().WEEK3_4, 'Weekly M.R - Weeks 3-4'); }
+function protect_Weekly_Week5(){ protectSheetsFast_(weeklyGroupsV13_().WEEK5, 'Weekly M.R - Week 5'); }
 
 function protect_ActiveSheetOnly() {
   return protectionLock_(() => {
@@ -283,14 +272,13 @@ function protect_ActiveSheetOnly() {
   });
 }
 
-function getWeeklyQueue_() { return protectionGroups_().WEEKLY_MR.slice(); }
 function resetWeeklyProtectionQueue() {
   PropertiesService.getDocumentProperties().deleteProperty('WEEKLY_PROTECT_INDEX');
-  uiAlert_('Weekly protection queue reset. Run Protect Weekly - Next Sheet.');
+  uiAlert_('Weekly protection queue reset.');
 }
 function protect_Weekly_NextSheet() {
   return protectionLock_(() => {
-    const names = getWeeklyQueue_();
+    const names = protectionGroups_().WEEKLY_MR.slice();
     const props = PropertiesService.getDocumentProperties();
     let idx = Number(props.getProperty('WEEKLY_PROTECT_INDEX') || 0);
     if (idx >= names.length) {

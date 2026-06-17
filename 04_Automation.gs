@@ -85,6 +85,112 @@ function handleApprovalEdit_(e) {
   if (approvedDate) sh.getRange(e.range.getRow(), approvedDate.col).setValue(new Date());
 }
 
+function handleMasterPriceCostUpdate_(e) {
+  const sheetName = e.range.getSheet().getName();
+  if (!['PURCHASES','STOCK MOVEMENT APPROVAL LOG'].includes(sheetName)) return;
+
+  let isCostCol = false;
+  if (sheetName === 'PURCHASES' && e.range.getColumn() === 11) { // Column K
+    isCostCol = true;
+  } else {
+    const header = findHeaderCol_(e.range.getSheet(), ['UNIT COST','COST PRICE','UNIT VALUE','PURCHASE UNIT PRICE'], 10);
+    if (header && e.range.getColumn() === header.col) isCostCol = true;
+  }
+
+  if (isCostCol) syncMasterPriceCostsFromApprovedMovements();
+}
+
+function syncMasterPriceCostsFromApprovedMovements() {
+  const ss = SpreadsheetApp.getActive();
+  const master = ss.getSheetByName(CONFIG.MASTER_PRICE_LIST) || ss.getSheetByName('MASTER PRICE LIST');
+  if (!master) throw new Error('MASTER_PRICELIST not found.');
+
+  const mCode = findHeaderCol_(master, ['ITEM CODE','CODE'], 10) || {row: 1, col: 1};
+  // Explicitly target Column C (3) or search for Cost header
+  const mCost = findHeaderCol_(master, ['COST PRICE','UNIT COST','COST'], 10) || {row: 1, col: 3};
+
+  const codeToRow = {};
+  const lastM = master.getLastRow();
+  if (lastM > mCode.row) {
+    const codes = master.getRange(mCode.row + 1, mCode.col, lastM - mCode.row, 1).getValues();
+    codes.forEach((v, i) => { if (v[0]) codeToRow[String(v[0]).trim()] = mCode.row + 1 + i; });
+  }
+
+  let updates = 0;
+  ['PURCHASES','STOCK MOVEMENT APPROVAL LOG'].forEach(sheetName => {
+    const sh = ss.getSheetByName(sheetName);
+    if (!sh) return;
+    const codeCol = findHeaderCol_(sh, ['ITEM CODE','CODE'], 10) || {row: 1, col: (sheetName === 'PURCHASES' ? 2 : 1)};
+    // Explicitly target Purchases K (11) if header not found
+    const costCol = findHeaderCol_(sh, ['UNIT COST','COST PRICE','UNIT VALUE','PURCHASE UNIT PRICE'], 10) || {row: 1, col: (sheetName === 'PURCHASES' ? 11 : 1)};
+    const statusCol = findHeaderCol_(sh, ['STATUS'], 10);
+
+    const start = Math.max(codeCol.row, costCol.row, statusCol ? statusCol.row : 1) + 1;
+    for (let r = start; r <= sh.getLastRow(); r++) {
+      const status = statusCol ? key_(sh.getRange(r, statusCol.col).getValue()) : 'APPROVED';
+      if (status === 'REJECTED') continue;
+
+      const code = String(sh.getRange(r, codeCol.col).getValue() || '').trim();
+      const cost = sh.getRange(r, costCol.col).getValue();
+      if (!code || cost === '' || isNaN(Number(cost))) continue;
+
+      const mRow = codeToRow[code];
+      if (!mRow) continue;
+
+      const current = master.getRange(mRow, mCost.col).getValue();
+      if (Number(current) !== Number(cost)) {
+        master.getRange(mRow, mCost.col).setValue(Number(cost));
+        updates++;
+      }
+    }
+  });
+  log_('MASTER_PRICE_SYNC', 'Updated cost prices: ' + updates);
+  uiAlert_('Master Price List cost sync complete. Updates made: ' + updates);
+}
+
+function syncMasterPriceItemsFromDepartments() {
+  const ss = SpreadsheetApp.getActive();
+  const master = ss.getSheetByName(CONFIG.MASTER_PRICE_LIST) || ss.getSheetByName('MASTER PRICE LIST');
+  if (!master) throw new Error('MASTER_PRICELIST not found.');
+
+  const mCode = findHeaderCol_(master, ['ITEM CODE','CODE'], 10) || {row: 1, col: 2};
+  const mItem = findHeaderCol_(master, ['ITEM','DESCRIPTION','PRODUCT'], 10) || {row: 1, col: 1};
+
+  const existingCodes = new Set();
+  const lastM = master.getLastRow();
+  if (lastM > mCode.row) {
+    master.getRange(mCode.row + 1, mCode.col, lastM - mCode.row, 1).getValues().forEach(v => {
+      if (v[0]) existingCodes.add(String(v[0]).trim());
+    });
+  }
+
+  let newItems = 0;
+  const sheetsToSync = ss.getSheets().filter(sh => isCSSheet_(sh.getName()) || isWeeklyMRSheet_(sh.getName()));
+
+  sheetsToSync.forEach(sh => {
+    const codeCol = findHeaderCol_(sh, ['ITEM CODE','CODE'], 10);
+    const itemCol = findHeaderCol_(sh, ['ITEM','DESCRIPTION'], 10);
+    if (!codeCol || !itemCol) return;
+
+    const lastRow = sh.getLastRow();
+    if (lastRow <= codeCol.row) return;
+
+    const data = sh.getRange(codeCol.row + 1, 1, lastRow - codeCol.row, sh.getLastColumn()).getValues();
+    data.forEach(row => {
+      const code = String(row[codeCol.col - 1] || '').trim();
+      const item = String(row[itemCol.col - 1] || '').trim();
+      if (code && !existingCodes.has(code)) {
+        master.appendRow([item, code, '']); // Minimal entry: Item, Code, [Cost]
+        existingCodes.add(code);
+        newItems++;
+      }
+    });
+  });
+
+  log_('MASTER_PRICE_ITEM_SYNC', 'New items added to Master Price List: ' + newItems);
+  uiAlert_('Master Price List item sync complete. New items added: ' + newItems);
+}
+
 function refreshApprovalTimestamps() {
   const sh = SpreadsheetApp.getActive().getSheetByName('STOCK MOVEMENT APPROVAL LOG');
   if (!sh) throw new Error('STOCK MOVEMENT APPROVAL LOG not found.');
@@ -103,99 +209,4 @@ function refreshApprovalTimestamps() {
     }
   }
   uiAlert_('Approval timestamp refresh complete. Rows checked: ' + count);
-}
-
-function handleMasterPriceCostUpdate_(e) {
-  const sheetName = e.range.getSheet().getName();
-  if (!['PURCHASES','STOCK MOVEMENT APPROVAL LOG'].includes(sheetName)) return;
-  // Only run for edits on likely cost/unit columns. Full sync is also available from menu.
-  const header = findHeaderCol_(e.range.getSheet(), ['UNIT COST','COST PRICE','UNIT VALUE','PURCHASE UNIT PRICE'], 10);
-  if (header && e.range.getColumn() === header.col) syncMasterPriceCostsFromApprovedMovements();
-}
-
-function syncMasterPriceCostsFromApprovedMovements() {
-  const ss = SpreadsheetApp.getActive();
-  const master = ss.getSheetByName(CONFIG.MASTER_PRICE_LIST) || ss.getSheetByName('MASTER PRICE LIST');
-  if (!master) throw new Error('MASTER_PRICELIST not found.');
-  const mCode = findHeaderCol_(master, ['ITEM CODE','CODE'], 10) || {row: 1, col: 1};
-  const mCost = findHeaderCol_(master, ['COST PRICE','UNIT COST','COST'], 10);
-  if (!mCost) throw new Error('Could not find Cost Price column in MASTER_PRICELIST.');
-
-  const codeToRow = {};
-  const lastM = master.getLastRow();
-  if (lastM > mCode.row) {
-    const codes = master.getRange(mCode.row + 1, mCode.col, lastM - mCode.row, 1).getValues();
-    codes.forEach((v, i) => { if (v[0]) codeToRow[String(v[0]).trim()] = mCode.row + 1 + i; });
-  }
-
-  let updates = 0;
-  ['PURCHASES','STOCK MOVEMENT APPROVAL LOG'].forEach(sheetName => {
-    const sh = ss.getSheetByName(sheetName);
-    if (!sh) return;
-    const codeCol = findHeaderCol_(sh, ['ITEM CODE','CODE'], 10);
-    const costCol = findHeaderCol_(sh, ['UNIT COST','COST PRICE','UNIT VALUE','PURCHASE UNIT PRICE'], 10);
-    const statusCol = findHeaderCol_(sh, ['STATUS'], 10);
-    if (!codeCol || !costCol) return;
-    const start = Math.max(codeCol.row, costCol.row, statusCol ? statusCol.row : 1) + 1;
-    for (let r = start; r <= sh.getLastRow(); r++) {
-      const status = statusCol ? key_(sh.getRange(r, statusCol.col).getValue()) : 'APPROVED';
-      if (status === 'REJECTED') continue; // Purchases count unless rejected, as agreed.
-      const code = String(sh.getRange(r, codeCol.col).getValue() || '').trim();
-      const cost = sh.getRange(r, costCol.col).getValue();
-      if (!code || cost === '' || isNaN(Number(cost))) continue;
-      const mRow = codeToRow[code];
-      if (!mRow) continue;
-      const current = master.getRange(mRow, mCost.col).getValue();
-      if (Number(current) !== Number(cost)) {
-        master.getRange(mRow, mCost.col).setValue(Number(cost));
-        updates++;
-      }
-    }
-  });
-  log_('MASTER_PRICE_SYNC', 'Updated cost prices: ' + updates);
-  uiAlert_('Master Price List cost sync complete. Updates made: ' + updates);
-}
-
-function syncMasterPriceItemsFromDepartments() {
-  const ss = SpreadsheetApp.getActive();
-  const master = ss.getSheetByName(CONFIG.MASTER_PRICE_LIST) || ss.getSheetByName('MASTER PRICE LIST');
-  if (!master) throw new Error('MASTER_PRICELIST not found.');
-
-  const mCode = findHeaderCol_(master, ['ITEM CODE','CODE'], 10) || {row: 1, col: 1};
-  const mItem = findHeaderCol_(master, ['ITEM','DESCRIPTION','PRODUCT'], 10) || {row: 1, col: 2};
-
-  const existingCodes = new Set();
-  const lastM = master.getLastRow();
-  if (lastM > mCode.row) {
-    master.getRange(mCode.row + 1, mCode.col, lastM - mCode.row, 1).getValues().forEach(v => {
-      if (v[0]) existingCodes.add(String(v[0]).trim());
-    });
-  }
-
-  let newItems = 0;
-  // Sync from CS Sheets and Weekly M.R Sheets
-  const sheetsToSync = ss.getSheets().filter(sh => isCSSheet_(sh.getName()) || isWeeklyMRSheet_(sh.getName()));
-
-  sheetsToSync.forEach(sh => {
-    const codeCol = findHeaderCol_(sh, ['ITEM CODE','CODE'], 10);
-    const itemCol = findHeaderCol_(sh, ['ITEM','DESCRIPTION'], 10);
-    if (!codeCol || !itemCol) return;
-
-    const lastRow = sh.getLastRow();
-    if (lastRow <= codeCol.row) return;
-
-    const data = sh.getRange(codeCol.row + 1, 1, lastRow - codeCol.row, sh.getLastColumn()).getValues();
-    data.forEach(row => {
-      const code = String(row[codeCol.col - 1] || '').trim();
-      const item = String(row[itemCol.col - 1] || '').trim();
-      if (code && !existingCodes.has(code)) {
-        master.appendRow(['', code, item]); // Minimal entry
-        existingCodes.add(code);
-        newItems++;
-      }
-    });
-  });
-
-  log_('MASTER_PRICE_ITEM_SYNC', 'New items added to Master Price List: ' + newItems);
-  uiAlert_('Master Price List item sync complete. New items added: ' + newItems);
 }
