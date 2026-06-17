@@ -160,52 +160,32 @@ function editableRangesForSheet_(sheet) {
     addRange_(ranges, safeRangeRC_(sheet, 5, 16, row1004 - 4, 4));  // P5:S1004
 
   // CS Sheets
-  } else if (name === 'CS STORE') {
+  } else if (isCSSheet_(name)) {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    const nr = Math.min(311, maxRows) - 4;
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));   // E5:F (Opening Stock)
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));  // AE5:AE (Physical Count)
-  } else if (name === 'CS MINI-MART') {
-    addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    const nr = Math.min(100, maxRows) - 4;
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
-  } else if (name === 'CS RESTAURANT') {
-    addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    const nr = Math.min(94, maxRows) - 4;
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
-  } else if (name === 'CS LAUNDRY') {
-    addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    const nr = Math.min(50, maxRows) - 4;
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
-  } else if (name === 'CS BAR') {
-    addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    const nr = Math.min(74, maxRows) - 4;
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
-  } else if (name === 'CS KITCHEN') {
-    addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    const nr = Math.min(50, maxRows) - 4;
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 2));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, nr, 1));
+    const lastRow = lastMeaningfulRow_(sheet, 5, 2); // Use Column B (Name) to find last row
+    const numRows = lastRow - 4;
+    if (numRows > 0) {
+      addRange_(ranges, safeRangeRC_(sheet, 5, 5, numRows, 2));  // E5:F (Opening Stock)
+      addRange_(ranges, safeRangeRC_(sheet, 5, 31, numRows, 1)); // AE5:AE (Physical Count)
+    }
 
   // Weekly M.R Sheets
   } else if (isWeeklyMRSheet_(name)) {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:B3'));
     ['D2:H2','J2:N2','P2:T2','V2:Z2','AB2:AF2','AH2:AL2','AN2:AR2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
     if (isWeekOneSheet_(name)) {
-      if (name.includes('KITCHEN')) addRange_(ranges, safeRangeA1_(sheet, 'D8:D106'));
-      else if (name.includes('BUSH BAR')) addRange_(ranges, safeRangeA1_(sheet, 'D8:D102'));
-      else if (name.includes('MINI-MART')) addRange_(ranges, safeRangeA1_(sheet, 'D8:D145'));
+      const lastRow = lastMeaningfulRow_(sheet, 8, 2); // Column B
+      const numRows = lastRow - 7;
+      if (numRows > 0) addRange_(ranges, safeRangeRC_(sheet, 8, 4, numRows, 1)); // D8:D (Opening Stock)
     }
 
   // M.R KITCHEN U
   } else if (name === 'M.R KITCHEN U') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:B3'));
     ['D2:F2','J2:L2','P2:R2','V2:X2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
-    addRange_(ranges, safeRangeA1_(sheet, 'D8:D70'));
+    const lastRow = lastMeaningfulRow_(sheet, 8, 1); // Column A
+    const numRows = lastRow - 7;
+    if (numRows > 0) addRange_(ranges, safeRangeRC_(sheet, 8, 4, numRows, 2)); // D8:E (Opening Stock)
   }
 
   return ranges;
