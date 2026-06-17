@@ -37,7 +37,7 @@ const CONFIG = {
   DEPARTMENT_OPTIONS: [
     'CS MINI-MART','CS BAR','CS RESTAURANT','CS LAUNDRY','CS STORE','CS KITCHEN',
     'M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','M.R KITCHEN U',
-    'Store: Housekeeping','Store: Reception','Store: Maintenance','Store: Kitchen','Store: Functionaries'
+    'Store: Housekeeping','Store: Reception','Store: Maintenance','Store: Kitchen','Store: Functionaries','BOOKING'
   ],
 
   MOVEMENT_TYPES: [
@@ -116,11 +116,13 @@ function onOpen() {
       .addItem('Rebuild SYSTEM_ACCESS', 'rebuildSystemAccess')
       .addItem('Setup SYSTEM_ACCESS Dropdowns', 'setupSystemAccessDropdowns')
       .addItem('Setup Log Dropdowns', 'setupStockMovementDropdowns')
+      .addItem('Setup Sales Breakdown Dropdowns', 'setupDailySalesBreakdownDropdowns')
       .addItem('Validate SYSTEM_ACCESS', 'validateSystemAccess')
       .addItem('Sync User Permissions', 'syncUserPermissions_All'))
     .addSubMenu(ui.createMenu('Carlisle Reports')
       .addItem('Generate Damage Report', 'generateDamageReport')
       .addItem('Generate Issued Stock Report', 'generateIssuedStockReport')
+      .addItem('Generate Utilized Report', 'generateUtilizedReport')
       .addItem('Generate Staff Liability Report', 'generateStaffLiabilityReport')
       .addItem('Generate Stock Audit Summary', 'generateStockAuditSummary')
       .addItem('Check Formula Errors', 'checkFormulaErrors'))

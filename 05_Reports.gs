@@ -15,7 +15,7 @@ function ensureReportSheet_(name, headers) {
 function approvalLogRows_() {
   const sh = SpreadsheetApp.getActive().getSheetByName('STOCK MOVEMENT APPROVAL LOG');
   if (!sh) return {headers: [], rows: []};
-  const headerRow = 6; // Carlisle approval log entries usually start around row 7.
+  const headerRow = 5; // Carlisle approval log entries usually start around row 6.
   const headers = sh.getRange(headerRow, 1, 1, sh.getLastColumn()).getValues()[0];
   const rows = sh.getLastRow() > headerRow ? sh.getRange(headerRow + 1, 1, sh.getLastRow() - headerRow, sh.getLastColumn()).getValues() : [];
   return {headers, rows};
@@ -41,7 +41,7 @@ function movementReport_(movementTypes, targetSheet) {
   rows.forEach((r, i) => {
     const type = cType >= 0 ? key_(r[cType]) : '';
     const status = cStatus >= 0 ? key_(r[cStatus]) : '';
-    if (movementTypes.includes(type) && status !== 'REJECTED') out.push([new Date(), i + 7].concat(r));
+    if (movementTypes.includes(type) && status !== 'REJECTED') out.push([new Date(), i + 6].concat(r));
   });
   const sh = ensureReportSheet_(targetSheet, outHeaders);
   if (out.length) sh.getRange(2, 1, out.length, outHeaders.length).setValues(out);
@@ -57,6 +57,10 @@ function generateIssuedStockReport() {
   const count = movementReport_(['ISSUED','ISSUED STOCK','ISSUE TO DEPARTMENT'], 'ISSUED STOCK REPORT');
   uiAlert_('Issued Stock Report generated. Rows: ' + count);
 }
+function generateUtilizedReport() {
+  const count = movementReport_(['UTILIZED'], 'UTILIZED REPORT');
+  uiAlert_('Utilized Report generated. Rows: ' + count);
+}
 function generateStaffLiabilityReport() {
   const count = movementReport_(['DAMAGE','DAMAGED'], 'STAFF LIABILITY REPORT');
   uiAlert_('Staff Liability Report generated from approved/non-rejected damages. Rows: ' + count);
@@ -64,7 +68,7 @@ function generateStaffLiabilityReport() {
 
 function generateStockAuditSummary() {
   const ss = SpreadsheetApp.getActive();
-  const csNames = ['CS MINI-MART','CS LAUNDRY','CS BAR','CS RESTAURANT','CS STORE','CS KITCHEN'];
+  const csNames = ['CS STORE','CS MINI-MART','CS LAUNDRY','CS BAR','CS RESTAURANT','CS KITCHEN'];
   const sh = ensureReportSheet_('STOCK AUDIT SUMMARY', ['Timestamp','Sheet','Item Code','Item','Opening','Added','Issued','Sold','Damaged','Physical Count','Closing Stock','Variance']);
   const out = [];
   csNames.forEach(name => {
@@ -73,7 +77,6 @@ function generateStockAuditSummary() {
     const last = s.getLastRow();
     if (last < 5) return;
     const values = s.getRange(1, 1, last, s.getLastColumn()).getValues();
-    // Heuristic scan: include rows with item/code and any numeric data
     for (let r = 4; r < values.length; r++) {
       const row = values[r];
       if (!row[0] && !row[1]) continue;

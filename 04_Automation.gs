@@ -7,6 +7,9 @@ function onEdit(e) {
   try {
     if (!e || !e.range) return;
 
+    // Check if the user has specific permission to edit this sheet from SYSTEM_ACCESS
+    if (checkSheetPermission_(e)) return;
+
     // Prevent editing approved rows in STOCK MOVEMENT APPROVAL LOG
     if (preventApprovedEdit_(e)) return;
 
@@ -17,6 +20,23 @@ function onEdit(e) {
   } catch (err) {
     log_('ON_EDIT_ERROR', err.message || err);
   }
+}
+
+/**
+ * Enforces 'Sheets Controlled' from SYSTEM_ACCESS at the edit level.
+ */
+function checkSheetPermission_(e) {
+  const userEmail = Session.getActiveUser().getEmail();
+  const sheetName = e.range.getSheet().getName();
+  if (isOwner_(userEmail)) return false;
+
+  const authorizedUsers = usersForSheet_(sheetName);
+  if (!authorizedUsers.map(u => u.toLowerCase()).includes(userEmail.toLowerCase())) {
+    e.range.setValue(e.oldValue || '');
+    uiAlert_('Access Denied: You are not assigned to control the sheet "' + sheetName + '" in SYSTEM_ACCESS.');
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -32,21 +52,15 @@ function preventApprovedEdit_(e) {
   const row = e.range.getRow();
   if (row <= statusCell.row) return false;
 
-  // Get current status of the row
   const status = key_(sh.getRange(row, statusCell.col).getValue());
   if (status !== 'APPROVED') return false;
 
-  // If editing the status cell itself to change it FROM approved, allow ONLY if Owner
   const userEmail = Session.getActiveUser().getEmail();
-  const isOwner = isOwner_(userEmail);
-
-  if (!isOwner) {
-    // Revert the change
+  if (!isOwner_(userEmail)) {
     e.range.setValue(e.oldValue || '');
     uiAlert_('Action Denied: This movement has already been APPROVED and is now locked. Only an Owner can modify it.');
     return true;
   }
-
   return false;
 }
 
@@ -273,4 +287,12 @@ function refreshApprovalTimestamps() {
     }
   });
   uiAlert_('Approval timestamp refresh complete. Rows updated: ' + count);
+}
+
+function isCSSheet_(name) {
+  return key_(name).startsWith('CS ');
+}
+function isWeeklyMRSheet_(name) {
+  const n = key_(name);
+  return n.includes('M.R') && (n.includes('MINI-MART') || n.includes('BUSH BAR') || n.includes('KITCHEN')) && !n.includes('KITCHEN U');
 }

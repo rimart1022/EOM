@@ -57,7 +57,6 @@ function rebuildSystemAccess() {
       });
     });
 
-    // Read and merge existing dropdown options from columns H and J
     roleOptions = getExistingOptions_(sh, 8, CONFIG.ROLE_OPTIONS);
     sheetOptions = getExistingOptions_(sh, 10, CONFIG.SHEET_CONTROL_OPTIONS);
   }
@@ -75,35 +74,24 @@ function rebuildSystemAccess() {
   sh.autoResizeColumns(1, 10);
 
   setupSystemAccessDropdowns();
-  log_('SYSTEM_ACCESS', 'Rebuilt SYSTEM_ACCESS, merged ' + roleOptions.length + ' roles and ' + sheetOptions.length + ' sheet options.');
-  uiAlert_('SYSTEM_ACCESS rebuilt. Existing staff and user-added dropdown items were preserved.');
+  log_('SYSTEM_ACCESS', 'Rebuilt SYSTEM_ACCESS and preserved staff/dropdowns.');
+  uiAlert_('SYSTEM_ACCESS rebuilt.');
 }
 
 function setupSystemAccessDropdowns() {
   const sh = getSystemAccessSheet_(true);
   const maxRows = Math.max(sh.getMaxRows() - 1, 50);
 
-  // Read merged options from columns H and J
   const roleOptions = getExistingOptions_(sh, 8, CONFIG.ROLE_OPTIONS);
   const sheetOptions = getExistingOptions_(sh, 10, CONFIG.SHEET_CONTROL_OPTIONS);
 
-  const roleRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(roleOptions, true)
-    .setAllowInvalid(false)
-    .build();
-  const activeRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(['Yes','No'], true)
-    .setAllowInvalid(false)
-    .build();
-  const sheetsRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(sheetOptions, true)
-    .setAllowInvalid(true) // allows comma-separated multiple entries.
-    .build();
+  const roleRule = SpreadsheetApp.newDataValidation().requireValueInList(roleOptions, true).setAllowInvalid(false).build();
+  const activeRule = SpreadsheetApp.newDataValidation().requireValueInList(['Yes','No'], true).setAllowInvalid(false).build();
+  const sheetsRule = SpreadsheetApp.newDataValidation().requireValueInList(sheetOptions, true).setAllowInvalid(true).build();
 
   sh.getRange(2, 3, maxRows, 1).setDataValidation(roleRule);
   sh.getRange(2, 4, maxRows, 1).setDataValidation(activeRule);
   sh.getRange(2, 6, maxRows, 1).setDataValidation(sheetsRule);
-  log_('SYSTEM_ACCESS', 'Dropdowns updated.');
 }
 
 function setupStockMovementDropdowns() {
@@ -119,30 +107,34 @@ function setupStockMovementDropdowns() {
 
   const maxRows = Math.max(sh.getMaxRows() - statusCol.row, 1000);
 
-  const deptRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(CONFIG.DEPARTMENT_OPTIONS, true)
-    .setAllowInvalid(false)
-    .build();
-  const typeRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(CONFIG.MOVEMENT_TYPES, true)
-    .setAllowInvalid(false)
-    .build();
-  const statusRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(['APPROVED','REJECTED','UNDER REVIEW','PENDING'], true)
-    .setAllowInvalid(false)
-    .build();
+  const deptRule = SpreadsheetApp.newDataValidation().requireValueInList(CONFIG.DEPARTMENT_OPTIONS, true).setAllowInvalid(false).build();
+  const typeRule = SpreadsheetApp.newDataValidation().requireValueInList(CONFIG.MOVEMENT_TYPES, true).setAllowInvalid(false).build();
+  const statusRule = SpreadsheetApp.newDataValidation().requireValueInList(['APPROVED','REJECTED','UNDER REVIEW','PENDING'], true).setAllowInvalid(false).build();
 
   sh.getRange(statusCol.row + 1, deptCol.col, maxRows, 1).setDataValidation(deptRule);
   sh.getRange(statusCol.row + 1, typeCol.col, maxRows, 1).setDataValidation(typeRule);
   sh.getRange(statusCol.row + 1, statusCol.col, maxRows, 1).setDataValidation(statusRule);
 
-  log_('STOCK_MOVEMENT', 'Dropdowns updated in log sheet.');
   uiAlert_('Stock Movement Approval Log dropdowns updated.');
+}
+
+function setupDailySalesBreakdownDropdowns() {
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName('DAILY SALES BREAKDOWN');
+  if (!sh) throw new Error('DAILY SALES BREAKDOWN sheet not found.');
+
+  const deptCol = findHeaderCol_(sh, ['DEPARTMENT'], 10) || {row: 1, col: 7}; // Default G
+  const maxRows = Math.max(sh.getMaxRows() - deptCol.row, 1000);
+
+  const deptRule = SpreadsheetApp.newDataValidation().requireValueInList(CONFIG.DEPARTMENT_OPTIONS, true).setAllowInvalid(false).build();
+  sh.getRange(deptCol.row + 1, deptCol.col, maxRows, 1).setDataValidation(deptRule);
+
+  uiAlert_('Daily Sales Breakdown dropdowns updated.');
 }
 
 function validateSystemAccess() {
   const sh = getSystemAccessSheet_(false);
-  if (!sh) throw new Error('SYSTEM_ACCESS sheet is missing. Run Rebuild SYSTEM_ACCESS.');
+  if (!sh) throw new Error('SYSTEM_ACCESS sheet is missing.');
   const map = getHeaderMap_(sh, 1);
   const errors = [];
   ['EMAIL','ROLE'].forEach(h => { if (!map[h]) errors.push('Missing required column: ' + h); });
@@ -173,7 +165,7 @@ function validateSystemAccess() {
   });
 
   if (errors.length) {
-    uiAlert_('SYSTEM_ACCESS validation found issues:\n\n' + errors.slice(0, 20).join('\n') + (errors.length > 20 ? '\n...more errors not shown' : ''));
+    uiAlert_('SYSTEM_ACCESS validation found issues:\n\n' + errors.slice(0, 20).join('\n'));
     return false;
   }
   uiAlert_('SYSTEM_ACCESS validation passed.');
@@ -213,4 +205,14 @@ function expandControlsToSheets_(controls) {
     }
   });
   return Array.from(out);
+}
+
+function usersForSheet_(sheetName) {
+  const records = getAccessRecords_();
+  const users = [];
+  records.forEach(r => {
+    const expanded = expandControlsToSheets_(r.sheets);
+    if (expanded.includes('*') || expanded.map(key_).includes(key_(sheetName))) users.push(r.email);
+  });
+  return Array.from(new Set(users));
 }

@@ -271,7 +271,7 @@ function resetAdminProtectionQueue() { PropertiesService.getDocumentProperties()
 function protect_CSSheets_Next() { runQueueProtection_('CS_PROTECT_INDEX', 'CS_SHEETS', 'CS Sheets'); }
 function resetCSSheetsProtectionQueue() { PropertiesService.getDocumentProperties().deleteProperty('CS_PROTECT_INDEX'); uiAlert_('CS Sheets queue reset.'); }
 
-function protect_CSSheets(){ protectSheetsFast_(protectionGroups_().CS_SHEETS, 'CS Sheets'); }
+function protect_CSSheets(){ protect_CSSheets_Next(); }
 
 function weeklyGroupsV13_() {
   return {
