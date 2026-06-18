@@ -15,10 +15,10 @@ function ensureReportSheet_(name, headers) {
 function approvalLogRows_() {
   const sh = SpreadsheetApp.getActive().getSheetByName('STOCK MOVEMENT APPROVAL LOG');
   if (!sh) return {headers: [], rows: []};
-  const headerRow = 5;
+  const headerRow = findHeaderCol_(sh, ['MOVEMENT TYPE'], 10) ? findHeaderCol_(sh, ['MOVEMENT TYPE'], 10).row : 6;
   const headers = sh.getRange(headerRow, 1, 1, sh.getLastColumn()).getValues()[0];
   const rows = sh.getLastRow() > headerRow ? sh.getRange(headerRow + 1, 1, sh.getLastRow() - headerRow, sh.getLastColumn()).getValues() : [];
-  return {headers, rows};
+  return {headers, rows, headerRow};
 }
 
 function colIndex_(headers, names) {
@@ -41,7 +41,7 @@ function movementReport_(movementTypes, targetSheet) {
   rows.forEach((r, i) => {
     const type = cType >= 0 ? key_(String(r[cType])) : '';
     const status = cStatus >= 0 ? key_(String(r[cStatus])) : '';
-    if (movementTypes.includes(type) && status !== 'REJECTED') out.push([new Date(), i + 6].concat(r));
+    if (movementTypes.includes(type) && status !== 'REJECTED') out.push([new Date(), i + data.headerRow + 1].concat(r));
   });
   const sh = ensureReportSheet_(targetSheet, outHeaders);
   if (out.length) sh.getRange(2, 1, out.length, outHeaders.length).setValues(out);

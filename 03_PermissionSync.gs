@@ -18,7 +18,7 @@ function syncUserPermissions_All() {
   if (!lock.tryLock(15000)) throw new Error('Another Carlisle permission task is already running. Try again shortly.');
   try {
     const ss = SpreadsheetApp.getActive();
-    const records = getAccessRecords_(); // Read once
+    const records = getAccessRecords_();
     if (!records.length) throw new Error('No active staff found in SYSTEM_ACCESS.');
 
     const staffEmails = getActiveStaffEmails_(records);

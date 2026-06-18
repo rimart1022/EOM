@@ -92,21 +92,6 @@ function logStockChange_(e) {
   } catch (err) {}
 }
 
-function findHeaderCol_(sheet, names, headerRows) {
-  headerRows = headerRows || 10;
-  const maxRows = Math.min(headerRows, sheet.getMaxRows());
-  if (maxRows === 0) return null;
-  const vals = sheet.getRange(1, 1, maxRows, sheet.getMaxColumns()).getValues();
-  const wanted = names.map(key_);
-  for (let r = 0; r < vals.length; r++) {
-    for (let c = 0; c < vals[r].length; c++) {
-      const k = key_(vals[r][c]);
-      if (wanted.includes(k)) return { row: r + 1, col: c + 1 };
-    }
-  }
-  return null;
-}
-
 function isAuthorizedApprover_(email) {
   const records = getAccessRecords_();
   const user = records.find(r => r.email.toLowerCase() === email.toLowerCase());
@@ -158,7 +143,8 @@ function syncSingleMovementToMasterPriceList_(sh, row) {
   const cost = sh.getRange(row, costHeader.col).getValue();
   if (!code || isNaN(Number(cost))) return;
 
-  const master = SpreadsheetApp.getActive().getSheetByName(CONFIG.MASTER_PRICE_LIST) || SpreadsheetApp.getActive().getSheetByName('MASTER PRICE LIST');
+  const ss = SpreadsheetApp.getActive();
+  const master = ss.getSheetByName(CONFIG.MASTER_PRICE_LIST) || ss.getSheetByName('MASTER PRICE LIST');
   if (!master) return;
 
   const mCodeHeader = findHeaderCol_(master, ['ITEM CODE','CODE'], 10) || {row: 1, col: 2};
@@ -185,18 +171,21 @@ function syncSingleMovementToDepartment_(sh, row) {
   const qty = Number(sh.getRange(row, qtyCol.col).getValue() || 0);
   const type = key_(sh.getRange(row, typeCol.col).getValue());
 
-  const deptSh = SpreadsheetApp.getActive().getSheetByName(deptName);
+  const ss = SpreadsheetApp.getActive();
+  const deptSh = ss.getSheetByName(deptName);
   if (!deptSh) return;
 
   const dCode = findHeaderCol_(deptSh, ['ITEM CODE','CODE'], 10);
   if (!dCode) return;
 
-  let targetCol = null;
-  if (type === 'SOLD' || type === 'UTILIZED') targetCol = findHeaderCol_(deptSh, ['SOLD'], 10);
-  else if (type === 'DAMAGED' || type === 'DAMAGE') targetCol = findHeaderCol_(deptSh, ['DAMAGED','DAMAGE'], 10);
-  else if (type === 'ISSUED') targetCol = findHeaderCol_(deptSh, ['ISSUED'], 10);
-  else if (type === 'ADDED') targetCol = findHeaderCol_(deptSh, ['ADDED STOCK','ADDED'], 10);
+  let targetColName = null;
+  if (type === 'SOLD' || type === 'UTILIZED') targetColName = ['SOLD','SALES'];
+  else if (type === 'DAMAGED' || type === 'DAMAGE') targetColName = ['DAMAGED','DAMAGE'];
+  else if (type === 'ISSUED') targetColName = ['ISSUED','ISSUED STOCK'];
+  else if (type === 'ADDED') targetColName = ['ADDED STOCK','ADDED'];
 
+  if (!targetColName) return;
+  const targetCol = findHeaderCol_(deptSh, targetColName, 10);
   if (!targetCol) return;
 
   const lastD = deptSh.getLastRow();
@@ -328,9 +317,9 @@ function syncQuantitiesFromApprovedMovements() {
     const dCode = findHeaderCol_(deptSh, ['ITEM CODE','CODE'], 10);
     if (!dCode) return;
 
-    const dSold = findHeaderCol_(deptSh, ['SOLD'], 10);
+    const dSold = findHeaderCol_(deptSh, ['SOLD','SALES'], 10);
     const dDamaged = findHeaderCol_(deptSh, ['DAMAGED','DAMAGE'], 10);
-    const dIssued = findHeaderCol_(deptSh, ['ISSUED'], 10);
+    const dIssued = findHeaderCol_(deptSh, ['ISSUED','ISSUED STOCK'], 10);
     const dAdded = findHeaderCol_(deptSh, ['ADDED STOCK','ADDED'], 10);
 
     const lastD = deptSh.getLastRow();

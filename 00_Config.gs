@@ -22,7 +22,6 @@ const CONFIG = {
     'PORTER','SECURITY','MOPOL','GARDENER','MARKETER','SOCIAL MEDIA','INTERN'
   ],
 
-  // These are options that can be typed or selected in SYSTEM_ACCESS > Sheets Controlled.
   SHEET_CONTROL_OPTIONS: [
     'ALL','OWNER SHEETS','ADMIN SHEETS','SYSTEM SHEETS','LOG SHEETS','REPORT SHEETS','REPORTS','CS SHEETS','ALL CS SHEETS','WEEKLY M.R SHEETS',
     'WEEKLY M.R WEEK 1-2','WEEKLY M.R WEEK 3-4','WEEKLY M.R WEEK 5',
@@ -144,4 +143,46 @@ function uiAlert_(message) {
   } catch (e) {
     console.warn("UI Alert suppressed: " + message);
   }
+}
+
+function isCSSheet_(name) {
+  const n = key_(name);
+  return n.startsWith('CS ');
+}
+
+function isWeekOneSheet_(name) {
+  const n = key_(name);
+  return n === 'M.R MINI-MART' || n === 'M.R BUSH BAR' || n === 'M.R KITCHEN';
+}
+
+function isWeeklyMRSheet_(name) {
+  const n = key_(name);
+  return n.includes('M.R') && (n.includes('MINI-MART') || n.includes('BUSH BAR') || n.includes('KITCHEN')) && !n.includes('KITCHEN U');
+}
+
+function lastMeaningfulRow_(sheet, startRow, keyCol) {
+  const max = sheet.getMaxRows();
+  if (max < startRow) return startRow - 1;
+  const numRows = max - startRow + 1;
+  const vals = sheet.getRange(startRow, keyCol, numRows, 1).getDisplayValues();
+  let last = startRow - 1;
+  for (let i = vals.length - 1; i >= 0; i--) {
+    if (String(vals[i][0] || '').trim() !== '') { last = startRow + i; break; }
+  }
+  return Math.max(last, startRow);
+}
+
+function findHeaderCol_(sheet, names, headerRows) {
+  headerRows = headerRows || 10;
+  const maxRows = Math.min(headerRows, sheet.getMaxRows());
+  if (maxRows === 0) return null;
+  const vals = sheet.getRange(1, 1, maxRows, sheet.getMaxColumns()).getValues();
+  const wanted = names.map(key_);
+  for (let r = 0; r < vals.length; r++) {
+    for (let c = 0; c < vals[r].length; c++) {
+      const k = key_(vals[r][c]);
+      if (wanted.includes(k)) return { row: r + 1, col: c + 1 };
+    }
+  }
+  return null;
 }
