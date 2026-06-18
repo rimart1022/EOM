@@ -1,60 +1,74 @@
 /****************************************************
  PERMISSION-SYNC FUNCTIONS ONLY.
- These read SYSTEM_ACCESS and update protection editors.
- Run separately from protection creation to avoid timeouts.
+ - Syncs Workbook (Spreadsheet) editors for all active staff.
+ - Syncs Protection editors for Owners/MDs only.
+ - Cashiers edit unprotected ranges via Workbook editor access.
 ****************************************************/
 
-function usersForSheetFromAccess_(sheetName) {
+function syncWorkbookEditors_() {
+  const ss = SpreadsheetApp.getActive();
+  const records = getAccessRecords_(); // Active users only
   const owners = getOwnerEmails_();
-  const directUsers = usersForSheet_(sheetName);
-  return Array.from(new Set(owners.concat(directUsers).filter(Boolean)));
+  const targetEmails = records.map(r => r.email.toLowerCase());
+  const currentUser = Session.getActiveUser().getEmail().toLowerCase();
+
+  // Add all active staff as spreadsheet editors
+  targetEmails.forEach(email => {
+    try { ss.addEditor(email); } catch(e) {}
+  });
+
+  // Remove users who are no longer in SYSTEM_ACCESS or are inactive
+  // But never remove Owners, MDs, or the current user.
+  const currentEditors = ss.getEditors();
+  currentEditors.forEach(e => {
+    const email = e.getEmail().toLowerCase();
+    if (!targetEmails.includes(email) && !owners.includes(email) && email !== currentUser) {
+      try { ss.removeEditor(email); } catch(e) {}
+    }
+  });
 }
 
 function syncPermissionsForSheetNames_(sheetNames, label) {
   const lock = LockService.getDocumentLock();
-  if (!lock.tryLock(15000)) throw new Error('Another Carlisle permission task is already running. Try again shortly.');
+  if (!lock.tryLock(15000)) throw new Error('Could not acquire lock for permission sync.');
   try {
     const ss = SpreadsheetApp.getActive();
+    const owners = getOwnerEmails_();
     const targetNames = new Set(sheetNames.map(key_));
     let count = 0;
+
     ss.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => {
       const range = p.getRange();
       if (!range) return;
-      const sheetName = range.getSheet().getName();
-      if (!targetNames.has(key_(sheetName))) return;
-      const editors = usersForSheetFromAccess_(sheetName);
+      const shName = range.getSheet().getName();
+      if (!targetNames.has(key_(shName))) return;
+
+      // Protection editors are ONLY Owners/MDs.
+      // This prevents normal staff (Cashiers) from editing protected areas/formulas.
       try { p.removeEditors(p.getEditors()); } catch (e) {}
-      if (editors.length) p.addEditors(editors);
+      if (owners.length) p.addEditors(owners);
       count++;
     });
-    log_('PERMISSION_SYNC', 'Synced editors for ' + label + ': ' + count + ' protections.');
-    uiAlert_('Done syncing permissions: ' + label + '\nProtections updated: ' + count);
+    log_('PERMISSION_SYNC', 'Synced ' + label + ' protections for ' + owners.length + ' owners. Total sheets: ' + count);
+    uiAlert_('Done syncing permissions for: ' + label + '\nWorkbook editors synced.\nProtection editors limited to Owners/MDs.');
   } finally {
     lock.releaseLock();
   }
 }
 
 function syncUserPermissions_All() {
+  syncWorkbookEditors_();
   const groups = protectionGroups_();
-  const allNames = [].concat(groups.PURCHASES, groups.DAILY_SALES, groups.DAILY_SALES_BREAKDOWN, groups.EXPENSES, groups.STOCK_MOVEMENT, groups.CS_SHEETS, groups.WEEKLY_MR, groups.MR_KITCHEN_U, groups.ADMIN);
-  syncPermissionsForSheetNames_(Array.from(new Set(allNames)), 'ALL');
+  const all = [].concat(groups.PURCHASES, groups.DAILY_SALES, groups.DAILY_SALES_BREAKDOWN, groups.EXPENSES, groups.STOCK_MOVEMENT, groups.CS_SHEETS, groups.WEEKLY_MR, groups.MR_KITCHEN_U, groups.ADMIN);
+  syncPermissionsForSheetNames_(Array.from(new Set(all)), 'ALL');
 }
+
 function syncUserPermissions_Purchases(){ syncPermissionsForSheetNames_(protectionGroups_().PURCHASES, 'Purchases'); }
 function syncUserPermissions_CSSheets(){ syncPermissionsForSheetNames_(protectionGroups_().CS_SHEETS, 'CS Sheets'); }
-function syncUserPermissions_WeeklyMR(){ syncPermissionsForSheetNames_(protectionGroups_().WEEKLY_MR.concat(protectionGroups_().MR_KITCHEN_U), 'Weekly M.R Sheets'); }
-
-/****************************************************
- V13 SMALLER PERMISSION SYNC GROUPS
- Run these after the corresponding protections if needed.
-****************************************************/
-function syncUserPermissions_Weekly_Week1(){ syncPermissionsForSheetNames_(weeklyGroupsV13_().WEEK1, 'Weekly M.R - Week 1'); }
-function syncUserPermissions_Weekly_Week2(){ syncPermissionsForSheetNames_(weeklyGroupsV13_().WEEK2, 'Weekly M.R - Week 2'); }
-function syncUserPermissions_Weekly_Week3(){ syncPermissionsForSheetNames_(weeklyGroupsV13_().WEEK3, 'Weekly M.R - Week 3'); }
-function syncUserPermissions_Weekly_Week4(){ syncPermissionsForSheetNames_(weeklyGroupsV13_().WEEK4, 'Weekly M.R - Week 4'); }
-function syncUserPermissions_Weekly_Week5(){ syncPermissionsForSheetNames_(weeklyGroupsV13_().WEEK5, 'Weekly M.R - Week 5'); }
+function syncUserPermissions_WeeklyMR(){ syncPermissionsForSheetNames_(protectionGroups_().WEEKLY_MR.concat(protectionGroups_().MR_KITCHEN_U), 'Weekly M.R'); }
 
 function syncUserPermissions_ActiveSheetOnly() {
-  const sheet = SpreadsheetApp.getActiveSheet();
-  if (!sheet) throw new Error('No active sheet found.');
-  syncPermissionsForSheetNames_([sheet.getName()], 'Active sheet only: ' + sheet.getName());
+  const s = SpreadsheetApp.getActiveSheet();
+  if (!s) return;
+  syncPermissionsForSheetNames_([s.getName()], 'Active: ' + s.getName());
 }

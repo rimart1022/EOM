@@ -4,7 +4,7 @@
  - Use one sheet protection per sheet.
  - Reuses existing Carlisle protection instead of deleting/recreating.
  - Weekly can be run one sheet at a time to avoid timeout.
- - Does not write into merged cells.
+ - Formula cells are never editable.
 ****************************************************/
 
 function protectionGroups_() {
@@ -17,17 +17,14 @@ function protectionGroups_() {
     CS_SHEETS: ['CS MINI-MART','CS LAUNDRY','CS BAR','CS RESTAURANT','CS STORE','CS KITCHEN'],
     WEEKLY_MR: ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','2 M.R MINI-MART','2 M.R BUSH BAR','2 M.R KITCHEN','3 M.R MINI-MART','3 M.R BUSH BAR','3 M.R KITCHEN','4 M.R MINI-MART','4 M.R BUSH BAR','4 M.R KITCHEN','5 M.R MINI-MART','5 M.R BUSH BAR','5 M.R KITCHEN'],
     MR_KITCHEN_U: ['M.R KITCHEN U'],
-    ADMIN: ['MASTER_PRICELIST','MASTER PRICE LIST','SYSTEM_ACCESS','SYSTEM_SETTINGS','SYSTEM_LOGS','EOM EDIT LOG','STOCK CHANGE LOG','STOCK AUDIT SUMMARY','AUDIT CHECK WEEK 1','AUDIT CHECK WEEK 2','AUDIT CHECK WEEK 3','AUDIT CHECK WEEK 4','AUDIT CHECK WEEK 5','ISSUED STOCK REPORT','DAMAGE REPORT','STAFF LIABILITY REPORT'],
-    SYSTEM: ['SYSTEM_ACCESS','SYSTEM_SETTINGS','SYSTEM_LOGS'],
-    LOGS: ['SYSTEM_LOGS','EOM EDIT LOG','STOCK CHANGE LOG'],
-    REPORTS: ['STOCK AUDIT SUMMARY','AUDIT CHECK WEEK 1','AUDIT CHECK WEEK 2','AUDIT CHECK WEEK 3','AUDIT CHECK WEEK 4','AUDIT CHECK WEEK 5','ISSUED STOCK REPORT','DAMAGE REPORT','STAFF LIABILITY REPORT'],
-    MASTER_PRICE: ['MASTER_PRICELIST','MASTER PRICE LIST']
+    ADMIN: ['MASTER_PRICELIST','SYSTEM_ACCESS','SYSTEM_SETTINGS','SYSTEM_LOGS','EOM EDIT LOG','STOCK CHANGE LOG','STOCK AUDIT SUMMARY','AUDIT CHECK WEEK 1','AUDIT CHECK WEEK 2','AUDIT CHECK WEEK 3','AUDIT CHECK WEEK 4','AUDIT CHECK WEEK 5','ISSUED STOCK REPORT','DAMAGE REPORT','STAFF LIABILITY REPORT','UTILIZED REPORT'],
+    MASTER_PRICE: ['MASTER_PRICELIST']
   };
 }
 
 function protectionLock_(callback) {
   const lock = LockService.getDocumentLock();
-  if (!lock.tryLock(5000)) throw new Error('Another Carlisle protection task is already running. Try again shortly.');
+  if (!lock.tryLock(10000)) throw new Error('Another Carlisle protection task is already running. Try again shortly.');
   try { return callback(); } finally { lock.releaseLock(); }
 }
 
@@ -76,14 +73,51 @@ function isCSSheet_(name) {
   return /^CS (MINI-MART|LAUNDRY|BAR|RESTAURANT|STORE|KITCHEN)$/i.test(name);
 }
 
+function pruneFormulas_(sheet, ranges) {
+  if (!ranges || !ranges.length) return [];
+  const mask = {};
+  ranges.forEach(range => {
+    if (!range) return;
+    const formulas = range.getFormulas();
+    const startRow = range.getRow();
+    const startCol = range.getColumn();
+    for (let r = 0; r < formulas.length; r++) {
+      for (let c = 0; c < formulas[r].length; c++) {
+        if (formulas[r][c] === "") {
+          const row = startRow + r;
+          const col = startCol + c;
+          if (!mask[col]) mask[col] = {};
+          mask[col][row] = true;
+        }
+      }
+    }
+  });
+  const consolidated = [];
+  const columns = Object.keys(mask).map(Number).sort((a,b) => a - b);
+  columns.forEach(col => {
+    const rows = Object.keys(mask[col]).map(Number).sort((a,b) => a - b);
+    if (!rows.length) return;
+    let startRow = rows[0];
+    for (let i = 1; i <= rows.length; i++) {
+      if (i === rows.length || rows[i] !== rows[i-1] + 1) {
+        consolidated.push(sheet.getRange(startRow, col, rows[i-1] - startRow + 1, 1));
+        if (i < rows.length) startRow = rows[i];
+      }
+    }
+  });
+  return consolidated;
+}
+
 function editableRangesForSheet_(sheet) {
   const name = sheet.getName();
   const maxRows = sheet.getMaxRows();
   const ranges = [];
+  const getCappedRow = (start, cap) => Math.min(lastMeaningfulRow_(sheet, start, 2), cap);
 
   if (name === 'PURCHASES') {
-    addRange_(ranges, safeRangeA1_(sheet, 'A:C'));
-    addRange_(ranges, safeRangeA1_(sheet, 'E:I'));
+    addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
+    addRange_(ranges, safeRangeA1_(sheet, 'A5:C'));
+    addRange_(ranges, safeRangeA1_(sheet, 'E5:I'));
     addRange_(ranges, safeRangeA1_(sheet, 'K:K'));
   } else if (name === 'DAILY SALES') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
@@ -93,42 +127,48 @@ function editableRangesForSheet_(sheet) {
     addRange_(ranges, safeRangeA1_(sheet, 'A5:I502'));
     addRange_(ranges, safeRangeA1_(sheet, 'K5:K502'));
   } else if (name === 'DAILY SALES BREAKDOWN') {
+    addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
     if (maxRows >= 5) {
-      addRange_(ranges, safeRangeRC_(sheet, 5, 1, maxRows - 4, 8));   // A:H
-      addRange_(ranges, safeRangeRC_(sheet, 5, 10, maxRows - 4, 3));  // J:L
-      addRange_(ranges, safeRangeRC_(sheet, 5, 14, maxRows - 4, 1));  // N
-      addRange_(ranges, safeRangeRC_(sheet, 5, 16, maxRows - 4, 4));  // P:S
+      addRange_(ranges, safeRangeRC_(sheet, 5, 1, maxRows - 4, 8));
+      addRange_(ranges, safeRangeRC_(sheet, 5, 10, maxRows - 4, 3));
+      addRange_(ranges, safeRangeRC_(sheet, 5, 14, maxRows - 4, 1));
+      addRange_(ranges, safeRangeRC_(sheet, 5, 16, maxRows - 4, 4));
     }
   } else if (name === 'STOCK MOVEMENT APPROVAL LOG') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
     if (maxRows >= 7) {
-      addRange_(ranges, safeRangeRC_(sheet, 7, 1, maxRows - 6, 3)); // A:C
-      addRange_(ranges, safeRangeRC_(sheet, 7, 5, maxRows - 6, 5)); // E:I
+      addRange_(ranges, safeRangeRC_(sheet, 7, 1, maxRows - 6, 3));
+      addRange_(ranges, safeRangeRC_(sheet, 7, 5, maxRows - 6, 5));
     }
   } else if (isWeeklyMRSheet_(name)) {
+    addRange_(ranges, safeRangeA1_(sheet, 'A3:B3'));
     ['D2:H2','J2:N2','P2:T2','V2:Z2','AB2:AF2','AH2:AL2','AN2:AR2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
-    if (isWeekOneSheet_(name)) {
-      const last = lastMeaningfulRow_(sheet, 8, 2);
-      addRange_(ranges, safeRangeRC_(sheet, 8, 4, last - 7, 1));
+    let cap = 0;
+    if (name === 'M.R KITCHEN') cap = 106;
+    else if (name === 'M.R BUSH BAR') cap = 102;
+    else if (name === 'M.R MINI-MART') cap = 145;
+    if (cap > 0 && isWeekOneSheet_(name)) {
+      const last = getCappedRow(8, cap);
+      if (last >= 8) addRange_(ranges, safeRangeRC_(sheet, 8, 4, last - 7, 1));
     }
   } else if (name === 'M.R KITCHEN U') {
-    ['A3:B3','D2:F2','J2:L2','P2:R2','V2:X2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
-    const last = lastMeaningfulRow_(sheet, 8, 2);
-    addRange_(ranges, safeRangeRC_(sheet, 8, 4, last - 7, 2));
+    addRange_(ranges, safeRangeA1_(sheet, 'A3:B3'));
+    ['D2:F2','J2:L2','P2:R2','V2:X2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
+    const last = getCappedRow(8, 70);
+    if (last >= 8) addRange_(ranges, safeRangeRC_(sheet, 8, 4, last - 7, 1));
   } else if (isCSSheet_(name)) {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    const last = lastMeaningfulRow_(sheet, 5, 2);
-    const headerRows = Math.min(8, sheet.getMaxRows());
-    const allHeaders = sheet.getRange(1, 1, headerRows, sheet.getMaxColumns()).getDisplayValues();
-    const cols = new Set();
-    allHeaders.forEach(row => row.forEach((h, i) => {
-      const k = key_(h);
-      if (k.includes('OPENING STOCK') || k === 'OPENING' || k.includes('PHYSICAL COUNT')) cols.add(i + 1);
-    }));
-    cols.forEach(col => addRange_(ranges, safeRangeRC_(sheet, 5, col, Math.max(last - 4, 1), 1)));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 31, Math.max(last - 4, 1), 1)); // AE5:AE
+    const caps = {'CS STORE':311,'CS MINI-MART':100,'CS RESTAURANT':94,'CS LAUNDRY':50,'CS BAR':74,'CS KITCHEN':50};
+    const cap = caps[name] || 0;
+    const last = getCappedRow(5, cap);
+    const numRows = Math.max(last - 4, 0);
+    if (numRows > 0) {
+      addRange_(ranges, safeRangeRC_(sheet, 5, 5, numRows, 2)); // E:F
+      if (name !== 'CS LAUNDRY') addRange_(ranges, safeRangeRC_(sheet, 5, 15, numRows, 1)); // O
+      addRange_(ranges, safeRangeRC_(sheet, 5, 31, numRows, 1)); // AE
+    }
   }
-  return ranges;
+  return pruneFormulas_(sheet, ranges);
 }
 
 function existingSheets_(names) {
@@ -136,32 +176,29 @@ function existingSheets_(names) {
   return names.map(n => ss.getSheetByName(n)).filter(Boolean);
 }
 
-function getOrCreateCarlisleProtection_(sheet) {
-  const desc = 'Carlisle EOM protection - ' + sheet.getName();
-  const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)
-    .filter(p => String(p.getDescription() || '') === desc);
-  // Remove duplicate Carlisle protections on THIS sheet only.
-  for (let i = 1; i < protections.length; i++) protections[i].remove();
-  if (protections[0]) return protections[0];
-  return sheet.protect().setDescription(desc);
-}
-
 function protectSheetFast_(sheet) {
-  const p = getOrCreateCarlisleProtection_(sheet);
+  const owners = getOwnerEmails_();
+  // Clear all existing sheet and range protections
+  sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => p.remove());
+  sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(p => p.remove());
+
+  const p = sheet.protect().setDescription('Carlisle EOM protection - ' + sheet.getName());
   p.setWarningOnly(false);
-  p.setDescription('Carlisle EOM protection - ' + sheet.getName());
-  p.setUnprotectedRanges(editableRangesForSheet_(sheet));
-  // Do not sync staff editors here. That is handled separately by Permission Sync.
+  p.removeEditors(p.getEditors());
+  if (owners.length) p.addEditors(owners);
+
+  const ranges = editableRangesForSheet_(sheet);
+  if (ranges.length) p.setUnprotectedRanges(ranges);
   return sheet.getName();
 }
 
 function protectSheetsFast_(sheetNames, label, maxSheetsPerRun) {
   return protectionLock_(() => {
     const sheets = existingSheets_(sheetNames).slice(0, maxSheetsPerRun || sheetNames.length);
-    if (!sheets.length) throw new Error('No matching sheets found for group: ' + label);
+    if (!sheets.length) return;
     const done = [];
     sheets.forEach(s => done.push(protectSheetFast_(s)));
-    log_('PROTECTION', 'Fast protection applied: ' + label + ' => ' + done.join(', '));
+    log_('PROTECTION', 'V16 Protection applied: ' + label + ' => ' + done.join(', '));
     uiAlert_('Done: ' + label + '\nSheets protected: ' + done.length + '\n' + done.join('\n'));
   });
 }
@@ -172,101 +209,59 @@ function protect_DailySalesBreakdown(){ protectSheetsFast_(protectionGroups_().D
 function protect_Expenses(){ protectSheetsFast_(protectionGroups_().EXPENSES, 'Expenses'); }
 function protect_StockMovement(){ protectSheetsFast_(protectionGroups_().STOCK_MOVEMENT, 'Stock Movement Approval Log'); }
 function protect_MRKitchenU(){ protectSheetsFast_(protectionGroups_().MR_KITCHEN_U, 'M.R Kitchen U'); }
-function protect_SystemSheets(){ protectSheetsFast_(protectionGroups_().SYSTEM, 'System Sheets', 1); }
-function protect_LogSheets(){ protectSheetsFast_(protectionGroups_().LOGS, 'Log Sheets', 1); }
-function protect_ReportSheets(){ protectSheetsFast_(protectionGroups_().REPORTS, 'Report Sheets', 1); }
 function protect_MasterPriceList(){ protectSheetsFast_(protectionGroups_().MASTER_PRICE, 'Master Pricelist', 1); }
+function protect_CSSheets(){ protectSheetsFast_(protectionGroups_().CS_SHEETS, 'CS Sheets', 2); }
 
 function resetAdminProtectionQueue() {
   PropertiesService.getDocumentProperties().deleteProperty('ADMIN_PROTECT_INDEX');
-  uiAlert_('Owner/Admin protection queue reset. Run Protect Owner/Admin Sheets - Next Sheet.');
+  uiAlert_('Owner/Admin protection queue reset.');
 }
 function protect_AdminSheets_Next() {
   return protectionLock_(() => {
     const names = protectionGroups_().ADMIN.slice();
     const props = PropertiesService.getDocumentProperties();
     let idx = Number(props.getProperty('ADMIN_PROTECT_INDEX') || 0);
-    if (idx >= names.length) {
-      props.deleteProperty('ADMIN_PROTECT_INDEX');
-      uiAlert_('Owner/Admin protection queue already complete.');
-      return;
-    }
+    if (idx >= names.length) { props.deleteProperty('ADMIN_PROTECT_INDEX'); uiAlert_('Queue complete.'); return; }
     const ss = SpreadsheetApp.getActive();
     let protectedName = null;
     while (idx < names.length) {
-      const sh = ss.getSheetByName(names[idx]);
-      idx++;
+      const sh = ss.getSheetByName(names[idx++]);
       if (sh) { protectedName = protectSheetFast_(sh); break; }
     }
     props.setProperty('ADMIN_PROTECT_INDEX', String(idx));
     if (idx >= names.length) props.deleteProperty('ADMIN_PROTECT_INDEX');
-    log_('PROTECTION', 'Owner/Admin next sheet protected: ' + protectedName);
-    uiAlert_(protectedName ? ('Protected: ' + protectedName + '\nProgress: ' + idx + '/' + names.length) : 'No more Owner/Admin sheets found.');
+    uiAlert_(protectedName ? ('Protected: ' + protectedName) : 'No more sheets found.');
   });
 }
-
-// Backward-compatible old menu/function name. It protects ONE admin/system/log/report sheet per run, not the whole group.
-function protect_AdminSheets(){ protect_AdminSheets_Next(); }
-function protect_CSSheets(){ protectSheetsFast_(protectionGroups_().CS_SHEETS, 'CS Sheets', 2); }
-
-function weeklyGroupsV13_() {
-  return {
-    WEEK1: ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN'],
-    WEEK2: ['2 M.R MINI-MART','2 M.R BUSH BAR','2 M.R KITCHEN'],
-    WEEK3: ['3 M.R MINI-MART','3 M.R BUSH BAR','3 M.R KITCHEN'],
-    WEEK4: ['4 M.R MINI-MART','4 M.R BUSH BAR','4 M.R KITCHEN'],
-    WEEK5: ['5 M.R MINI-MART','5 M.R BUSH BAR','5 M.R KITCHEN'],
-    MINIMART: ['M.R MINI-MART','2 M.R MINI-MART','3 M.R MINI-MART','4 M.R MINI-MART','5 M.R MINI-MART'],
-    BUSHBAR: ['M.R BUSH BAR','2 M.R BUSH BAR','3 M.R BUSH BAR','4 M.R BUSH BAR','5 M.R BUSH BAR'],
-    KITCHEN: ['M.R KITCHEN','2 M.R KITCHEN','3 M.R KITCHEN','4 M.R KITCHEN','5 M.R KITCHEN']
-  };
-}
-
-function protect_Weekly_Week1(){ protectSheetsFast_(weeklyGroupsV13_().WEEK1, 'Weekly M.R - Week 1', 1); }
-function protect_Weekly_Week2(){ protectSheetsFast_(weeklyGroupsV13_().WEEK2, 'Weekly M.R - Week 2', 1); }
-function protect_Weekly_Week3(){ protectSheetsFast_(weeklyGroupsV13_().WEEK3, 'Weekly M.R - Week 3', 1); }
-function protect_Weekly_Week4(){ protectSheetsFast_(weeklyGroupsV13_().WEEK4, 'Weekly M.R - Week 4', 1); }
-function protect_Weekly_Week5(){ protectSheetsFast_(weeklyGroupsV13_().WEEK5, 'Weekly M.R - Week 5', 1); }
-function protect_Weekly_MiniMart(){ protectSheetsFast_(weeklyGroupsV13_().MINIMART, 'Weekly M.R - Mini-Mart', 1); }
-function protect_Weekly_BushBar(){ protectSheetsFast_(weeklyGroupsV13_().BUSHBAR, 'Weekly M.R - Bush Bar', 1); }
-function protect_Weekly_Kitchen(){ protectSheetsFast_(weeklyGroupsV13_().KITCHEN, 'Weekly M.R - Kitchen', 1); }
 
 function protect_ActiveSheetOnly() {
   return protectionLock_(() => {
     const sheet = SpreadsheetApp.getActiveSheet();
-    if (!sheet) throw new Error('No active sheet found.');
     protectSheetFast_(sheet);
-    log_('PROTECTION', 'Fast active sheet protection: ' + sheet.getName());
-    uiAlert_('Done: protected active sheet only\n' + sheet.getName());
+    log_('PROTECTION', 'Active sheet protection: ' + sheet.getName());
+    uiAlert_('Done: ' + sheet.getName());
   });
 }
 
-function getWeeklyQueue_() { return protectionGroups_().WEEKLY_MR.slice(); }
 function resetWeeklyProtectionQueue() {
   PropertiesService.getDocumentProperties().deleteProperty('WEEKLY_PROTECT_INDEX');
-  uiAlert_('Weekly protection queue reset. Run Protect Weekly - Next Sheet.');
+  uiAlert_('Weekly queue reset.');
 }
 function protect_Weekly_NextSheet() {
   return protectionLock_(() => {
-    const names = getWeeklyQueue_();
+    const names = protectionGroups_().WEEKLY_MR.slice();
     const props = PropertiesService.getDocumentProperties();
     let idx = Number(props.getProperty('WEEKLY_PROTECT_INDEX') || 0);
-    if (idx >= names.length) {
-      props.deleteProperty('WEEKLY_PROTECT_INDEX');
-      uiAlert_('Weekly protection queue already complete.');
-      return;
-    }
+    if (idx >= names.length) { props.deleteProperty('WEEKLY_PROTECT_INDEX'); uiAlert_('Queue complete.'); return; }
     const ss = SpreadsheetApp.getActive();
     let protectedName = null;
     while (idx < names.length) {
-      const sh = ss.getSheetByName(names[idx]);
-      idx++;
+      const sh = ss.getSheetByName(names[idx++]);
       if (sh) { protectedName = protectSheetFast_(sh); break; }
     }
     props.setProperty('WEEKLY_PROTECT_INDEX', String(idx));
     if (idx >= names.length) props.deleteProperty('WEEKLY_PROTECT_INDEX');
-    log_('PROTECTION', 'Weekly next sheet protected: ' + protectedName);
-    uiAlert_(protectedName ? ('Protected: ' + protectedName + '\nProgress: ' + idx + '/' + names.length) : 'No more weekly sheets found.');
+    uiAlert_(protectedName ? ('Protected: ' + protectedName) : 'No more sheets found.');
   });
 }
 
@@ -278,6 +273,5 @@ function clearCarlisleProtections() {
   ss.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(p => {
     if (String(p.getDescription() || '').startsWith('Carlisle EOM protection - ')) p.remove();
   });
-  log_('PROTECTION', 'Cleared Carlisle protections only.');
   uiAlert_('Carlisle protections cleared.');
 }
