@@ -49,22 +49,39 @@ function rebuildSystemAccess() {
   }
 
   sh.getRange('H1').setValue('ROLE OPTIONS').setFontWeight('bold').setBackground('#cfe2f3');
-  sh.getRange(2, 8, CONFIG.ROLE_OPTIONS.length, 1).setValues(CONFIG.ROLE_OPTIONS.map(x => [x]));
   sh.getRange('J1').setValue('SHEETS CONTROLLED OPTIONS').setFontWeight('bold').setBackground('#fce5cd');
-  sh.getRange(2, 10, CONFIG.SHEET_CONTROL_OPTIONS.length, 1).setValues(CONFIG.SHEET_CONTROL_OPTIONS.map(x => [x]));
   sh.autoResizeColumns(1, 10);
   setupSystemAccessDropdowns();
   log_('SYSTEM_ACCESS', 'Rebuilt SYSTEM_ACCESS and preserved ' + oldRows.length + ' staff rows.');
   uiAlert_('SYSTEM_ACCESS rebuilt. Existing staff rows were preserved.');
 }
 
+function getExistingOptions_(sheet, column, defaultOptions) {
+  const last = sheet.getLastRow();
+  const options = new Set(defaultOptions.map(o => String(o).trim()));
+  if (last >= 2) {
+    const values = sheet.getRange(2, column, last - 1, 1).getValues().flat();
+    values.forEach(v => {
+      const s = String(v).trim();
+      if (s && s !== 'ROLE OPTIONS' && s !== 'SHEETS CONTROLLED OPTIONS') options.add(s);
+    });
+  }
+  return Array.from(options).sort();
+}
+
 function setupSystemAccessDropdowns() {
   const sh = getSystemAccessSheet_(true);
-  if (sh.getLastRow() < 2) sh.insertRowsAfter(1, 20);
-  const maxRows = Math.max(sh.getMaxRows() - 1, 50);
+
+  const roleOptions = getExistingOptions_(sh, 8, CONFIG.ROLE_OPTIONS);
+  sh.getRange(2, 8, roleOptions.length, 1).setValues(roleOptions.map(x => [x]));
+
+  const sheetOptions = getExistingOptions_(sh, 10, CONFIG.SHEET_CONTROL_OPTIONS);
+  sh.getRange(2, 10, sheetOptions.length, 1).setValues(sheetOptions.map(x => [x]));
+
+  const maxRows = Math.max(sh.getMaxRows() - 1, 100);
 
   const roleRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(CONFIG.ROLE_OPTIONS, true)
+    .requireValueInList(roleOptions, true)
     .setAllowInvalid(false)
     .build();
   const activeRule = SpreadsheetApp.newDataValidation()
@@ -72,15 +89,15 @@ function setupSystemAccessDropdowns() {
     .setAllowInvalid(false)
     .build();
   const sheetsRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(CONFIG.SHEET_CONTROL_OPTIONS, true)
-    .setAllowInvalid(true) // allows comma-separated multiple entries.
+    .requireValueInList(sheetOptions, true)
+    .setAllowInvalid(true)
     .build();
 
   sh.getRange(2, 3, maxRows, 1).setDataValidation(roleRule);
   sh.getRange(2, 4, maxRows, 1).setDataValidation(activeRule);
   sh.getRange(2, 6, maxRows, 1).setDataValidation(sheetsRule);
-  log_('SYSTEM_ACCESS', 'Dropdowns set up.');
-  uiAlert_('SYSTEM_ACCESS dropdowns updated. For multiple sheets, use comma-separated values if multi-select is unavailable.');
+
+  log_('SYSTEM_ACCESS', 'Dropdowns setup/merged.');
 }
 
 function validateSystemAccess() {
@@ -93,8 +110,8 @@ function validateSystemAccess() {
 
   const data = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 0), Math.max(sh.getLastColumn(), 6)).getValues();
   const seen = {};
-  const validRoles = new Set(CONFIG.ROLE_OPTIONS.map(key_));
-  const validControls = new Set(CONFIG.SHEET_CONTROL_OPTIONS.map(key_));
+  const validRoles = new Set(getExistingOptions_(sh, 8, CONFIG.ROLE_OPTIONS).map(key_));
+  const validControls = new Set(getExistingOptions_(sh, 10, CONFIG.SHEET_CONTROL_OPTIONS).map(key_));
 
   data.forEach((r, idx) => {
     const row = idx + 2;
@@ -127,7 +144,7 @@ function getAccessRecords_() {
   if (!map.EMAIL || !map.ROLE) return [];
   const data = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 0), Math.max(sh.getLastColumn(), 6)).getValues();
   return data.map(r => {
-    const email = String(r[(map.EMAIL || 1) - 1] || '').trim();
+    const email = String(r[(map.EMAIL || 1) - 1] || '').trim().toLowerCase();
     const role = key_(r[(map.ROLE || 3) - 1]);
     const activeVal = key_(r[(map.ACTIVE || map.STATUS || 4) - 1] || 'YES');
     const sheets = splitList_(r[(map['SHEETS CONTROLLED'] || 6) - 1]);
@@ -136,9 +153,18 @@ function getAccessRecords_() {
 }
 
 function getOwnerEmails_() {
-  return getAccessRecords_()
-    .filter(r => CONFIG.OWNER_ROLES.includes(r.role) || r.sheets.includes('ALL'))
-    .map(r => r.email);
+  const sh = getSystemAccessSheet_(false);
+  if (!sh) return [];
+  const map = getHeaderMap_(sh, 1);
+  if (!map.EMAIL || !map.ROLE) return [];
+  const data = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 0), Math.max(sh.getLastColumn(), 6)).getValues();
+  return data.map(r => {
+    const email = String(r[(map.EMAIL || 1) - 1] || '').trim().toLowerCase();
+    const role = key_(r[(map.ROLE || 3) - 1]);
+    const sheets = splitList_(r[(map['SHEETS CONTROLLED'] || 6) - 1]);
+    const isOwner = CONFIG.OWNER_ROLES.includes(role) || sheets.includes('ALL');
+    return isOwner ? email : null;
+  }).filter(Boolean);
 }
 
 function expandControlsToSheets_(controls) {

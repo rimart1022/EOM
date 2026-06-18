@@ -1,17 +1,72 @@
 /****************************************************
- AUTOMATION: approval timestamps, edit log, master price cost update.
- Kept separate from protection/permission logic.
+ AUTOMATION: approval, audit, and security.
 ****************************************************/
 
 function onEdit(e) {
   try {
     if (!e || !e.range) return;
+    const sh = e.range.getSheet();
+    const name = sh.getName();
+
+    // Sheet-level access check
+    const user = Session.getActiveUser().getEmail();
+    const owners = getOwnerEmails_();
+    if (!owners.includes(user)) {
+      const allowed = usersForSheet_(name);
+      if (!allowed.includes(user)) {
+        e.range.setValue(e.oldValue);
+        uiAlert_('Access Denied: You are not assigned to ' + name);
+        return;
+      }
+    }
+
+    if (preventApprovedEdit_(e)) return;
     auditEdit_(e);
     handleApprovalEdit_(e);
     handleMasterPriceCostUpdate_(e);
   } catch (err) {
     log_('ON_EDIT_ERROR', err.message || err);
   }
+}
+
+function preventApprovedEdit_(e) {
+  const sh = e.range.getSheet();
+  if (sh.getName() !== 'STOCK MOVEMENT APPROVAL LOG') return false;
+  const statusCell = findHeaderCol_(sh, ['STATUS'], 10);
+  if (!statusCell) return false;
+
+  const row = e.range.getRow();
+  if (row <= statusCell.row) return false;
+
+  const currentStatus = key_(sh.getRange(row, statusCell.col).getValue());
+  if (currentStatus === 'APPROVED') {
+    const owners = getOwnerEmails_();
+    if (!owners.includes(Session.getActiveUser().getEmail())) {
+      e.range.setValue(e.oldValue);
+      uiAlert_('This row is APPROVED and locked. Contact an Owner.');
+      return true;
+    }
+  }
+  return false;
+}
+
+function handleApprovalEdit_(e) {
+  const sh = e.range.getSheet();
+  if (sh.getName() !== 'STOCK MOVEMENT APPROVAL LOG') return;
+  const statusCell = findHeaderCol_(sh, ['STATUS'], 10);
+  if (!statusCell || e.range.getColumn() !== statusCell.col || e.range.getRow() <= statusCell.row) return;
+
+  const owners = getOwnerEmails_();
+  if (!owners.includes(Session.getActiveUser().getEmail())) {
+    e.range.setValue(e.oldValue);
+    uiAlert_('Only Owners/MDs can change status.');
+    return;
+  }
+
+  const approvedBy = findHeaderCol_(sh, ['APPROVED BY','APPROVER'], 10);
+  const approvedDate = findHeaderCol_(sh, ['APPROVAL DATE','APPROVED DATE'], 10);
+  if (approvedBy) sh.getRange(e.range.getRow(), approvedBy.col).setValue(Session.getActiveUser().getEmail());
+  if (approvedDate) sh.getRange(e.range.getRow(), approvedDate.col).setValue(new Date());
 }
 
 function auditEdit_(e) {
@@ -38,54 +93,38 @@ function findHeaderCol_(sheet, names, headerRows) {
   return null;
 }
 
-function handleApprovalEdit_(e) {
-  const sh = e.range.getSheet();
-  if (sh.getName() !== 'STOCK MOVEMENT APPROVAL LOG') return;
-  const statusCell = findHeaderCol_(sh, ['STATUS'], 10);
-  if (!statusCell || e.range.getColumn() !== statusCell.col || e.range.getRow() <= statusCell.row) return;
-  const status = key_(e.value);
-  if (!['APPROVED','REJECTED','UNDER REVIEW','PENDING'].includes(status)) return;
-  const approvedBy = findHeaderCol_(sh, ['APPROVED BY','APPROVER'], 10);
-  const approvedDate = findHeaderCol_(sh, ['APPROVAL DATE','APPROVED DATE'], 10);
-  if (approvedBy) sh.getRange(e.range.getRow(), approvedBy.col).setValue(Session.getActiveUser().getEmail());
-  if (approvedDate) sh.getRange(e.range.getRow(), approvedDate.col).setValue(new Date());
-}
-
 function refreshApprovalTimestamps() {
   const sh = SpreadsheetApp.getActive().getSheetByName('STOCK MOVEMENT APPROVAL LOG');
-  if (!sh) throw new Error('STOCK MOVEMENT APPROVAL LOG not found.');
+  if (!sh) return;
   const statusCell = findHeaderCol_(sh, ['STATUS'], 10);
   const approvedBy = findHeaderCol_(sh, ['APPROVED BY','APPROVER'], 10);
   const approvedDate = findHeaderCol_(sh, ['APPROVAL DATE','APPROVED DATE'], 10);
-  if (!statusCell || !approvedBy || !approvedDate) throw new Error('Required approval columns not found.');
+  if (!statusCell || !approvedBy || !approvedDate) return;
   const last = sh.getLastRow();
-  let count = 0;
   for (let r = statusCell.row + 1; r <= last; r++) {
     const status = key_(sh.getRange(r, statusCell.col).getValue());
     if (['APPROVED','REJECTED','UNDER REVIEW'].includes(status)) {
       if (!sh.getRange(r, approvedBy.col).getValue()) sh.getRange(r, approvedBy.col).setValue('SYSTEM CHECK');
       if (!sh.getRange(r, approvedDate.col).getValue()) sh.getRange(r, approvedDate.col).setValue(new Date());
-      count++;
     }
   }
-  uiAlert_('Approval timestamp refresh complete. Rows checked: ' + count);
+  uiAlert_('Timestamps refreshed.');
 }
 
 function handleMasterPriceCostUpdate_(e) {
-  const sheetName = e.range.getSheet().getName();
-  if (!['PURCHASES','STOCK MOVEMENT APPROVAL LOG'].includes(sheetName)) return;
-  // Only run for edits on likely cost/unit columns. Full sync is also available from menu.
-  const header = findHeaderCol_(e.range.getSheet(), ['UNIT COST','COST PRICE','UNIT VALUE','PURCHASE UNIT PRICE'], 10);
+  const name = e.range.getSheet().getName();
+  if (!['PURCHASES','STOCK MOVEMENT APPROVAL LOG'].includes(name)) return;
+  const header = findHeaderCol_(e.range.getSheet(), ['UNIT COST','COST PRICE','UNIT VALUE'], 10);
   if (header && e.range.getColumn() === header.col) syncMasterPriceCostsFromApprovedMovements();
 }
 
 function syncMasterPriceCostsFromApprovedMovements() {
   const ss = SpreadsheetApp.getActive();
-  const master = ss.getSheetByName(CONFIG.MASTER_PRICE_LIST) || ss.getSheetByName('MASTER PRICE LIST');
-  if (!master) throw new Error('MASTER_PRICELIST not found.');
+  const master = ss.getSheetByName(CONFIG.MASTER_PRICE_LIST);
+  if (!master) return;
   const mCode = findHeaderCol_(master, ['ITEM CODE','CODE'], 10) || {row: 1, col: 1};
-  const mCost = findHeaderCol_(master, ['COST PRICE','UNIT COST','COST'], 10);
-  if (!mCost) throw new Error('Could not find Cost Price column in MASTER_PRICELIST.');
+  const mCost = findHeaderCol_(master, ['COST PRICE','UNIT COST'], 10);
+  if (!mCost) return;
 
   const codeToRow = {};
   const lastM = master.getLastRow();
@@ -94,30 +133,22 @@ function syncMasterPriceCostsFromApprovedMovements() {
     codes.forEach((v, i) => { if (v[0]) codeToRow[String(v[0]).trim()] = mCode.row + 1 + i; });
   }
 
-  let updates = 0;
-  ['PURCHASES','STOCK MOVEMENT APPROVAL LOG'].forEach(sheetName => {
-    const sh = ss.getSheetByName(sheetName);
+  ['PURCHASES','STOCK MOVEMENT APPROVAL LOG'].forEach(name => {
+    const sh = ss.getSheetByName(name);
     if (!sh) return;
     const codeCol = findHeaderCol_(sh, ['ITEM CODE','CODE'], 10);
-    const costCol = findHeaderCol_(sh, ['UNIT COST','COST PRICE','UNIT VALUE','PURCHASE UNIT PRICE'], 10);
+    const costCol = findHeaderCol_(sh, ['UNIT COST','COST PRICE','UNIT VALUE'], 10);
     const statusCol = findHeaderCol_(sh, ['STATUS'], 10);
     if (!codeCol || !costCol) return;
-    const start = Math.max(codeCol.row, costCol.row, statusCol ? statusCol.row : 1) + 1;
+    const start = Math.max(codeCol.row, costCol.row) + 1;
     for (let r = start; r <= sh.getLastRow(); r++) {
       const status = statusCol ? key_(sh.getRange(r, statusCol.col).getValue()) : 'APPROVED';
-      if (status === 'REJECTED') continue; // Purchases count unless rejected, as agreed.
+      if (status === 'REJECTED') continue;
       const code = String(sh.getRange(r, codeCol.col).getValue() || '').trim();
       const cost = sh.getRange(r, costCol.col).getValue();
-      if (!code || cost === '' || isNaN(Number(cost))) continue;
+      if (!code || isNaN(Number(cost)) || cost === '') continue;
       const mRow = codeToRow[code];
-      if (!mRow) continue;
-      const current = master.getRange(mRow, mCost.col).getValue();
-      if (Number(current) !== Number(cost)) {
-        master.getRange(mRow, mCost.col).setValue(Number(cost));
-        updates++;
-      }
+      if (mRow) master.getRange(mRow, mCost.col).setValue(Number(cost));
     }
   });
-  log_('MASTER_PRICE_SYNC', 'Updated cost prices: ' + updates);
-  uiAlert_('Master Price List cost sync complete. Updates made: ' + updates);
 }

@@ -1,6 +1,5 @@
 /****************************************************
- REPORTS restored.
- These are simple, safe report generators from existing workbook data.
+ REPORTS
 ****************************************************/
 
 function ensureReportSheet_(name, headers) {
@@ -15,7 +14,7 @@ function ensureReportSheet_(name, headers) {
 function approvalLogRows_() {
   const sh = SpreadsheetApp.getActive().getSheetByName('STOCK MOVEMENT APPROVAL LOG');
   if (!sh) return {headers: [], rows: []};
-  const headerRow = 6; // Carlisle approval log entries usually start around row 7.
+  const headerRow = 6;
   const headers = sh.getRange(headerRow, 1, 1, sh.getLastColumn()).getValues()[0];
   const rows = sh.getLastRow() > headerRow ? sh.getRange(headerRow + 1, 1, sh.getLastRow() - headerRow, sh.getLastColumn()).getValues() : [];
   return {headers, rows};
@@ -45,21 +44,21 @@ function movementReport_(movementTypes, targetSheet) {
   });
   const sh = ensureReportSheet_(targetSheet, outHeaders);
   if (out.length) sh.getRange(2, 1, out.length, outHeaders.length).setValues(out);
-  sh.autoResizeColumns(1, Math.min(outHeaders.length, 12));
+  sh.autoResizeColumns(1, 12);
   return out.length;
 }
 
 function generateDamageReport() {
-  const count = movementReport_(['DAMAGE','DAMAGED'], 'DAMAGE REPORT');
-  uiAlert_('Damage Report generated. Rows: ' + count);
+  movementReport_(['DAMAGE','DAMAGED'], 'DAMAGE REPORT');
 }
 function generateIssuedStockReport() {
-  const count = movementReport_(['ISSUED','ISSUED STOCK','ISSUE TO DEPARTMENT'], 'ISSUED STOCK REPORT');
-  uiAlert_('Issued Stock Report generated. Rows: ' + count);
+  movementReport_(['ISSUED','ISSUED STOCK'], 'ISSUED STOCK REPORT');
 }
 function generateStaffLiabilityReport() {
-  const count = movementReport_(['DAMAGE','DAMAGED'], 'STAFF LIABILITY REPORT');
-  uiAlert_('Staff Liability Report generated from approved/non-rejected damages. Rows: ' + count);
+  movementReport_(['DAMAGE','DAMAGED'], 'STAFF LIABILITY REPORT');
+}
+function generateUtilizedReport() {
+  movementReport_(['UTILIZED','UTILIZED STOCK','BOOKING'], 'UTILIZED REPORT');
 }
 
 function generateStockAuditSummary() {
@@ -73,18 +72,14 @@ function generateStockAuditSummary() {
     const last = s.getLastRow();
     if (last < 5) return;
     const values = s.getRange(1, 1, last, s.getLastColumn()).getValues();
-    // Generic scan: include visible rows with item/code in first columns and any non-zero variance-like last columns.
     for (let r = 4; r < values.length; r++) {
       const row = values[r];
       if (!row[0] && !row[1]) continue;
-      const itemCode = row[0] || row[1] || '';
-      const item = row[1] || row[2] || '';
       const nums = row.filter(v => typeof v === 'number');
-      if (nums.length) out.push([new Date(), name, itemCode, item].concat(nums.slice(0, 8)));
+      if (nums.length) out.push([new Date(), name, row[0], row[1]].concat(nums.slice(0, 8)));
     }
   });
-  if (out.length) sh.getRange(2, 1, out.length, Math.min(out[0].length, 12)).setValues(out.map(r => r.slice(0, 12)));
-  uiAlert_('Stock Audit Summary generated. Rows: ' + out.length);
+  if (out.length) sh.getRange(2, 1, out.length, 12).setValues(out.map(r => r.slice(0, 12)));
 }
 
 function checkFormulaErrors() {
@@ -98,12 +93,10 @@ function checkFormulaErrors() {
     const displays = range.getDisplayValues();
     formulas.forEach((row, r) => row.forEach((f, c) => {
       if (!f) return;
-      const d = displays[r][c];
-      if (errors.some(err => String(d).includes(err)) || errors.some(err => String(f).includes(err))) {
-        out.push([new Date(), s.getName(), s.getRange(r + 1, c + 1).getA1Notation(), f, d]);
+      if (errors.some(err => String(displays[r][c]).includes(err))) {
+        out.push([new Date(), s.getName(), s.getRange(r + 1, c + 1).getA1Notation(), f, displays[r][c]]);
       }
     }));
   });
   if (out.length) sh.getRange(2, 1, out.length, 5).setValues(out);
-  uiAlert_(out.length ? 'Formula errors found: ' + out.length : 'No formula error strings found.');
 }
