@@ -432,12 +432,3 @@ function refreshApprovalTimestamps() {
   });
   uiAlert_('Approval timestamp refresh complete. Rows updated: ' + count);
 }
-
-function isCSSheet_(name) {
-  const n = key_(name);
-  return n.startsWith('CS ');
-}
-function isWeeklyMRSheet_(name) {
-  const n = key_(name);
-  return n.includes('M.R') && (n.includes('MINI-MART') || n.includes('BUSH BAR') || n.includes('KITCHEN')) && !n.includes('KITCHEN U');
-}

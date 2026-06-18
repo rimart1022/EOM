@@ -119,6 +119,10 @@ function lastMeaningfulRow_(sheet, startRow, keyCol) {
   return Math.max(last, startRow);
 }
 
+function isCSSheet_(name) {
+  const n = key_(name);
+  return n.startsWith('CS ');
+}
 function isWeekOneSheet_(name) {
   const n = key_(name);
   return n === 'M.R MINI-MART' || n === 'M.R BUSH BAR' || n === 'M.R KITCHEN';
@@ -130,34 +134,47 @@ function isWeeklyMRSheet_(name) {
 
 function editableRangesForSheet_(sheet) {
   const name = key_(sheet.getName());
-  const maxRows = sheet.getMaxRows();
   const ranges = [];
-
-  const row1004 = Math.min(maxRows, 1004);
 
   // Core Transaction Sheets
   if (name === 'PURCHASES') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 1, row1004 - 4, 3)); // A5:C1004
-    addRange_(ranges, safeRangeRC_(sheet, 5, 5, row1004 - 4, 5)); // E5:I1004
-    addRange_(ranges, safeRangeRC_(sheet, 5, 11, row1004 - 4, 1)); // K5:K1004
+    const lastRow = lastMeaningfulRow_(sheet, 5, 1); // Column A
+    const nr = lastRow - 4;
+    if (nr > 0) {
+      addRange_(ranges, safeRangeRC_(sheet, 5, 1, nr, 3)); // A5:C
+      addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 5)); // E5:I
+      addRange_(ranges, safeRangeRC_(sheet, 5, 11, nr, 1)); // K5:K
+    }
   } else if (name === 'EXPENSES') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 1, 502 - 4, 9)); // A5:I502
-    addRange_(ranges, safeRangeRC_(sheet, 5, 11, 502 - 4, 1)); // K5:K502
+    const lastRow = Math.min(lastMeaningfulRow_(sheet, 5, 1), 502);
+    const nr = lastRow - 4;
+    if (nr > 0) {
+      addRange_(ranges, safeRangeRC_(sheet, 5, 1, nr, 9)); // A5:I502
+      addRange_(ranges, safeRangeRC_(sheet, 5, 11, nr, 1)); // K5:K502
+    }
   } else if (name === 'STOCK MOVEMENT APPROVAL LOG') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
-    addRange_(ranges, safeRangeRC_(sheet, 7, 1, row1004 - 6, 3)); // A7:C1004
-    addRange_(ranges, safeRangeRC_(sheet, 7, 5, row1004 - 6, 5)); // E7:I1004
+    const lastRow = lastMeaningfulRow_(sheet, 7, 1); // Column A
+    const nr = lastRow - 6;
+    if (nr > 0) {
+      addRange_(ranges, safeRangeRC_(sheet, 7, 1, nr, 3)); // A7:C
+      addRange_(ranges, safeRangeRC_(sheet, 7, 5, nr, 5)); // E7:I
+    }
   } else if (name === 'DAILY SALES') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
     addRange_(ranges, safeRangeA1_(sheet, 'O5:O35'));
   } else if (name === 'DAILY SALES BREAKDOWN') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 1, row1004 - 4, 8));   // A5:H (Editable) - I is Restricted
-    addRange_(ranges, safeRangeRC_(sheet, 5, 10, row1004 - 4, 3));  // J5:L (Editable) - M is Restricted
-    addRange_(ranges, safeRangeRC_(sheet, 5, 14, Math.min(maxRows, 10004) - 4, 1)); // N5:N (Editable) - O is Restricted
-    addRange_(ranges, safeRangeRC_(sheet, 5, 16, row1004 - 4, 4));  // P5:S (Editable)
+    const lastRow = lastMeaningfulRow_(sheet, 5, 1); // Column A
+    const nr = lastRow - 4;
+    if (nr > 0) {
+      addRange_(ranges, safeRangeRC_(sheet, 5, 1, nr, 8));   // A5:H (Editable) - I is Restricted
+      addRange_(ranges, safeRangeRC_(sheet, 5, 10, nr, 3));  // J5:L (Editable) - M is Restricted
+      addRange_(ranges, safeRangeRC_(sheet, 5, 14, nr, 1));  // N5:N (Editable) - O is Restricted
+      addRange_(ranges, safeRangeRC_(sheet, 5, 16, nr, 4));  // P5:S (Editable)
+    }
 
   // CS Sheets
   } else if (isCSSheet_(name)) {
