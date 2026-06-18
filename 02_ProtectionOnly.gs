@@ -154,10 +154,10 @@ function editableRangesForSheet_(sheet) {
     addRange_(ranges, safeRangeA1_(sheet, 'O5:O35'));
   } else if (name === 'DAILY SALES BREAKDOWN') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
-    addRange_(ranges, safeRangeRC_(sheet, 5, 1, row1004 - 4, 8));   // A5:H1004
-    addRange_(ranges, safeRangeRC_(sheet, 5, 10, row1004 - 4, 3));  // J5:L1004
-    addRange_(ranges, safeRangeRC_(sheet, 5, 14, Math.min(maxRows, 10004) - 4, 1)); // N5:N10004
-    addRange_(ranges, safeRangeRC_(sheet, 5, 16, row1004 - 4, 4));  // P5:S1004
+    addRange_(ranges, safeRangeRC_(sheet, 5, 1, row1004 - 4, 8));   // A5:H (Editable) - I is Restricted
+    addRange_(ranges, safeRangeRC_(sheet, 5, 10, row1004 - 4, 3));  // J5:L (Editable) - M is Restricted
+    addRange_(ranges, safeRangeRC_(sheet, 5, 14, Math.min(maxRows, 10004) - 4, 1)); // N5:N (Editable) - O is Restricted
+    addRange_(ranges, safeRangeRC_(sheet, 5, 16, row1004 - 4, 4));  // P5:S (Editable)
 
   // CS Sheets
   } else if (isCSSheet_(name)) {
@@ -173,10 +173,16 @@ function editableRangesForSheet_(sheet) {
   } else if (isWeeklyMRSheet_(name)) {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:B3'));
     ['D2:H2','J2:N2','P2:T2','V2:Z2','AB2:AF2','AH2:AL2','AN2:AR2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
-    if (isWeekOneSheet_(name)) {
-      const lastRow = lastMeaningfulRow_(sheet, 8, 2); // Column B
-      const numRows = lastRow - 7;
-      if (numRows > 0) addRange_(ranges, safeRangeRC_(sheet, 8, 4, numRows, 1)); // D8:D (Opening Stock)
+
+    const lastRow = lastMeaningfulRow_(sheet, 8, 2); // Column B
+    const numRows = lastRow - 7;
+    if (numRows > 0) {
+      // Sales columns: F, L, R, X, AD, AJ, AP (cols 6, 12, 18, 24, 30, 36, 42)
+      [6, 12, 18, 24, 30, 36, 42].forEach(col => addRange_(ranges, safeRangeRC_(sheet, 8, col, numRows, 1)));
+      // Opening Stock (Week 1 only): D8:D
+      if (isWeekOneSheet_(name)) {
+        addRange_(ranges, safeRangeRC_(sheet, 8, 4, numRows, 1));
+      }
     }
 
   // M.R KITCHEN U
