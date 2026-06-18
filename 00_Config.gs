@@ -1,8 +1,7 @@
 /****************************************************
  CARLISLE E.O.M STOCK SYSTEM - V16 DECOUPLED ARCHITECTURE
- - No hard-coded staff emails.
- - SYSTEM_ACCESS is the source of users and sheet permissions.
- - Protections and permission-sync are separated to avoid timeouts.
+ - SYSTEM_ACCESS is the single source of truth for users/permissions.
+ - Shared utilities are centralized here for zero redundancy.
 ****************************************************/
 
 const CONFIG = {
@@ -13,6 +12,8 @@ const CONFIG = {
   MASTER_PRICE_LIST: 'MASTER_PRICELIST',
 
   SYSTEM_ACCESS_HEADERS: ['Email', 'Full Name', 'Role', 'Active', 'Notes', 'Sheets Controlled'],
+
+  // Rule 2: MD and MANAGING DIRECTOR allowed to give approval.
   OWNER_ROLES: ['OWNER', 'MANAGING DIRECTOR', 'MD'],
 
   ROLE_OPTIONS: [
@@ -24,11 +25,8 @@ const CONFIG = {
 
   SHEET_CONTROL_OPTIONS: [
     'ALL','OWNER SHEETS','ADMIN SHEETS','SYSTEM SHEETS','LOG SHEETS','REPORT SHEETS','REPORTS','CS SHEETS','ALL CS SHEETS','WEEKLY M.R SHEETS',
-    'WEEKLY M.R WEEK 1-2','WEEKLY M.R WEEK 3-4','WEEKLY M.R WEEK 5',
     'PURCHASES','DAILY SALES','DAILY SALES BREAKDOWN','EXPENSES','STOCK MOVEMENT APPROVAL LOG',
-    'CS MINI-MART','CS BAR','CS RESTAURANT','CS LAUNDRY','CS STORE','CS KITCHEN',
-    'M.R MINI-MART 1-5','M.R BUSH BAR 1-5','M.R KITCHEN 1-5',
-    'M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','M.R KITCHEN U',
+    'CS BAR','CS KITCHEN','CS MINI-MART','CS LAUNDRY','CS BAR','CS RESTAURANT','CS STORE',
     'MASTER_PRICELIST','SYSTEM_ACCESS','SYSTEM_LOGS','SYSTEM_SETTINGS','EOM EDIT LOG','STOCK CHANGE LOG',
     'DAMAGE REPORT','ISSUED STOCK REPORT','STAFF LIABILITY REPORT','STOCK AUDIT SUMMARY','FORMULA ERROR CHECK'
   ],
@@ -39,33 +37,15 @@ const CONFIG = {
     'Store: Housekeeping','Store: Reception','Store: Maintenance','Store: Kitchen','Store: Functionaries','BOOKING'
   ],
 
-  MOVEMENT_TYPES: [
-    'SOLD','ISSUED','DAMAGED','UTILIZED','ADDED','OPENING'
-  ],
+  MOVEMENT_TYPES: ['SOLD','ISSUED','DAMAGED','UTILIZED','ADDED','OPENING'],
 
   GROUP_ALIASES: {
     'ALL': ['*'],
-    'OWNER SHEETS': ['MASTER_PRICELIST','MASTER PRICE LIST','SYSTEM_ACCESS','SYSTEM_SETTINGS','SYSTEM_LOGS','EOM EDIT LOG','STOCK CHANGE LOG','STOCK AUDIT SUMMARY','AUDIT CHECK WEEK 1','AUDIT CHECK WEEK 2','AUDIT CHECK WEEK 3','AUDIT CHECK WEEK 4','AUDIT CHECK WEEK 5','ISSUED STOCK REPORT','DAMAGE REPORT','STAFF LIABILITY REPORT'],
-    'ADMIN SHEETS': ['MASTER_PRICELIST','MASTER PRICE LIST','SYSTEM_ACCESS','SYSTEM_SETTINGS','SYSTEM_LOGS','EOM EDIT LOG','STOCK CHANGE LOG','STOCK AUDIT SUMMARY','AUDIT CHECK WEEK 1','AUDIT CHECK WEEK 2','AUDIT CHECK WEEK 3','AUDIT CHECK WEEK 4','AUDIT CHECK WEEK 5','ISSUED STOCK REPORT','DAMAGE REPORT','STAFF LIABILITY REPORT'],
-    'SYSTEM SHEETS': ['SYSTEM_ACCESS','SYSTEM_SETTINGS','SYSTEM_LOGS'],
-    'LOG SHEETS': ['SYSTEM_LOGS','EOM EDIT LOG','STOCK CHANGE LOG'],
-    'REPORT SHEETS': ['STOCK AUDIT SUMMARY','AUDIT CHECK WEEK 1','AUDIT CHECK WEEK 2','AUDIT CHECK WEEK 3','AUDIT CHECK WEEK 4','AUDIT CHECK WEEK 5','ISSUED STOCK REPORT','DAMAGE REPORT','STAFF LIABILITY REPORT'],
-    'REPORTS': ['DAMAGE REPORT','ISSUED STOCK REPORT','STAFF LIABILITY REPORT','STOCK AUDIT SUMMARY','FORMULA ERROR CHECK','AUDIT CHECK WEEK 1','AUDIT CHECK WEEK 2','AUDIT CHECK WEEK 3','AUDIT CHECK WEEK 4','AUDIT CHECK WEEK 5'],
-    'PURCHASES': ['PURCHASES'],
-    'DAILY SALES': ['DAILY SALES'],
-    'DAILY SALES BREAKDOWN': ['DAILY SALES BREAKDOWN'],
-    'EXPENSES': ['EXPENSES'],
-    'STOCK MOVEMENT APPROVAL LOG': ['STOCK MOVEMENT APPROVAL LOG'],
-    'MASTER_PRICELIST': ['MASTER_PRICELIST'],
-    'CS SHEETS': ['CS MINI-MART','CS LAUNDRY','CS BAR','CS RESTAURANT','CS STORE','CS KITCHEN'],
-    'ALL CS SHEETS': ['CS MINI-MART','CS LAUNDRY','CS BAR','CS RESTAURANT','CS STORE','CS KITCHEN'],
-    'WEEKLY M.R SHEETS': ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','2 M.R MINI-MART','3 M.R MINI-MART','4 M.R MINI-MART','5 M.R MINI-MART','2 M.R BUSH BAR','3 M.R BUSH BAR','4 M.R BUSH BAR','5 M.R BUSH BAR','2 M.R KITCHEN','3 M.R KITCHEN','4 M.R KITCHEN','5 M.R KITCHEN'],
-    'WEEKLY M.R WEEK 1-2': ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','2 M.R MINI-MART','2 M.R BUSH BAR','2 M.R KITCHEN'],
-    'WEEKLY M.R WEEK 3-4': ['3 M.R MINI-MART','3 M.R BUSH BAR','3 M.R KITCHEN','4 M.R MINI-MART','4 M.R BUSH BAR','4 M.R KITCHEN'],
-    'WEEKLY M.R WEEK 5': ['5 M.R MINI-MART','5 M.R BUSH BAR','5 M.R KITCHEN'],
-    'M.R MINI-MART 1-5': ['M.R MINI-MART','2 M.R MINI-MART','3 M.R MINI-MART','4 M.R MINI-MART','5 M.R MINI-MART'],
-    'M.R BUSH BAR 1-5': ['M.R BUSH BAR','2 M.R BUSH BAR','3 M.R BUSH BAR','4 M.R BUSH BAR','5 M.R BUSH BAR'],
-    'M.R KITCHEN 1-5': ['M.R KITCHEN','2 M.R KITCHEN','3 M.R KITCHEN','4 M.R KITCHEN','5 M.R KITCHEN']
+    'OWNER SHEETS': ['MASTER_PRICELIST','SYSTEM_ACCESS','SYSTEM_SETTINGS','SYSTEM_LOGS','EOM EDIT LOG','STOCK CHANGE LOG','STOCK AUDIT SUMMARY','ISSUED STOCK REPORT','DAMAGE REPORT','STAFF LIABILITY REPORT'],
+    'ADMIN SHEETS': ['MASTER_PRICELIST','SYSTEM_ACCESS','SYSTEM_SETTINGS','SYSTEM_LOGS','EOM EDIT LOG','STOCK CHANGE LOG','STOCK AUDIT SUMMARY','ISSUED STOCK REPORT','DAMAGE REPORT','STAFF LIABILITY REPORT'],
+    'CS SHEETS': ['CS STORE','CS MINI-MART','CS RESTAURANT','CS LAUNDRY','CS BAR','CS KITCHEN'],
+    'ALL CS SHEETS': ['CS STORE','CS MINI-MART','CS RESTAURANT','CS LAUNDRY','CS BAR','CS KITCHEN'],
+    'WEEKLY M.R SHEETS': ['M.R MINI-MART','M.R BUSH BAR','M.R KITCHEN','2 M.R MINI-MART','3 M.R MINI-MART','4 M.R MINI-MART','5 M.R MINI-MART','2 M.R BUSH BAR','3 M.R BUSH BAR','4 M.R BUSH BAR','5 M.R BUSH BAR','2 M.R KITCHEN','3 M.R KITCHEN','4 M.R KITCHEN','5 M.R KITCHEN']
   }
 };
 
@@ -87,16 +67,11 @@ function onOpen() {
       .addItem('Protect CS Sheets - Next Sheet', 'protect_CSSheets_Next')
       .addItem('Protect Admin Sheets - Next Sheet', 'protect_AdminSheets_Next')
       .addSeparator()
-      .addItem('Clear All Protections', 'clearCarlisleProtections')
-      .addSeparator()
-      .addItem('Reset Admin Protection Queue', 'resetAdminProtectionQueue')
-      .addItem('Reset CS Sheets Protection Queue', 'resetCSSheetsProtectionQueue')
-      .addItem('Reset Weekly Protection Queue', 'resetWeeklyProtectionQueue'))
+      .addItem('Clear All Protections', 'clearCarlisleProtections'))
     .addSubMenu(ui.createMenu('Menu 2: Access Control Carlisle EOM')
       .addItem('Rebuild SYSTEM_ACCESS', 'rebuildSystemAccess')
       .addItem('Setup SYSTEM_ACCESS Dropdowns', 'setupSystemAccessDropdowns')
       .addItem('Setup Log Dropdowns', 'setupStockMovementDropdowns')
-      .addItem('Setup Sales Breakdown Dropdowns', 'setupDailySalesBreakdownDropdowns')
       .addItem('Validate SYSTEM_ACCESS', 'validateSystemAccess')
       .addItem('Sync User Permissions', 'syncUserPermissions_All'))
     .addSubMenu(ui.createMenu('Carlisle Reports')
@@ -105,44 +80,30 @@ function onOpen() {
       .addItem('Generate Utilized Report', 'generateUtilizedReport')
       .addItem('Generate Staff Liability Report', 'generateStaffLiabilityReport')
       .addItem('Generate Stock Audit Summary', 'generateStockAuditSummary')
-      .addItem('Check Formula Errors', 'checkFormulaErrors')
-      .addSeparator()
-      .addItem('Clear All Reports', 'clearAllReports'))
+      .addItem('Check Formula Errors', 'checkFormulaErrors'))
     .addSubMenu(ui.createMenu('Utilities')
       .addItem('Refresh Approval Timestamps', 'refreshApprovalTimestamps')
-      .addItem('Run Master Price Cost Sync', 'syncMasterPriceCostsFromApprovedMovements')
-      .addItem('Run Quantity Movement Sync', 'syncQuantitiesFromApprovedMovements')
-      .addItem('Sync Master Price Items from Departments', 'syncMasterPriceItemsFromDepartments'))
+      .addItem('Sync Master Price Items', 'syncMasterPriceItemsFromDepartments'))
     .addToUi();
 }
 
-function key_(value) {
-  return String(value || '').trim().toUpperCase().replace(/\s+/g, ' ');
-}
+/** SHARED UTILITIES **/
 
-function splitList_(value) {
-  return String(value || '')
-    .split(/[,\n;]+/)
-    .map(v => key_(v))
-    .filter(Boolean);
-}
+function key_(v) { return String(v || '').trim().toUpperCase().replace(/\s+/g, ' '); }
+
+function splitList_(v) { return String(v || '').split(/[,\n;]+/).map(v => key_(v)).filter(Boolean); }
 
 function log_(type, message) {
   try {
     const ss = SpreadsheetApp.getActive();
     let sh = ss.getSheetByName(CONFIG.LOG_SHEET);
     if (!sh) sh = ss.insertSheet(CONFIG.LOG_SHEET);
-    if (sh.getLastRow() === 0) sh.appendRow(['Timestamp','Type','User','Message']);
     sh.appendRow([new Date(), type, Session.getActiveUser().getEmail(), message]);
   } catch (e) {}
 }
 
 function uiAlert_(message) {
-  try {
-    SpreadsheetApp.getUi().alert(message);
-  } catch (e) {
-    console.warn("UI Alert suppressed: " + message);
-  }
+  try { SpreadsheetApp.getUi().alert(message); } catch (e) { console.warn(message); }
 }
 
 function isCSSheet_(name) {
@@ -150,21 +111,20 @@ function isCSSheet_(name) {
   return n.startsWith('CS ');
 }
 
-function isWeekOneSheet_(name) {
-  const n = key_(name);
-  return n === 'M.R MINI-MART' || n === 'M.R BUSH BAR' || n === 'M.R KITCHEN';
-}
-
 function isWeeklyMRSheet_(name) {
   const n = key_(name);
   return n.includes('M.R') && (n.includes('MINI-MART') || n.includes('BUSH BAR') || n.includes('KITCHEN')) && !n.includes('KITCHEN U');
 }
 
+function isWeekOneSheet_(name) {
+  const n = key_(name);
+  return n === 'M.R MINI-MART' || n === 'M.R BUSH BAR' || n === 'M.R KITCHEN';
+}
+
 function lastMeaningfulRow_(sheet, startRow, keyCol) {
   const max = sheet.getMaxRows();
   if (max < startRow) return startRow - 1;
-  const numRows = max - startRow + 1;
-  const vals = sheet.getRange(startRow, keyCol, numRows, 1).getDisplayValues();
+  const vals = sheet.getRange(startRow, keyCol, max - startRow + 1, 1).getDisplayValues();
   let last = startRow - 1;
   for (let i = vals.length - 1; i >= 0; i--) {
     if (String(vals[i][0] || '').trim() !== '') { last = startRow + i; break; }
@@ -180,8 +140,7 @@ function findHeaderCol_(sheet, names, headerRows) {
   const wanted = names.map(key_);
   for (let r = 0; r < vals.length; r++) {
     for (let c = 0; c < vals[r].length; c++) {
-      const k = key_(vals[r][c]);
-      if (wanted.includes(k)) return { row: r + 1, col: c + 1 };
+      if (wanted.includes(key_(vals[r][c]))) return { row: r + 1, col: c + 1 };
     }
   }
   return null;

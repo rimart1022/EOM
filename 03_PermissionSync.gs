@@ -1,60 +1,36 @@
 /****************************************************
  PERMISSION-SYNC FUNCTIONS ONLY.
  These read SYSTEM_ACCESS and update Spreadsheet-level editors.
- Sheet-level structural protections (locked ranges) are maintained
- by Menu 1 and remain fixed once applied.
 ****************************************************/
-
-/**
- * Returns an array of user emails that should have edit access to the spreadsheet
- * based on SYSTEM_ACCESS sheet.
- */
-function getActiveStaffEmails_(records) {
-  return Array.from(new Set(records.map(r => r.email).filter(Boolean)));
-}
 
 function syncUserPermissions_All() {
   const lock = LockService.getDocumentLock();
-  if (!lock.tryLock(15000)) throw new Error('Another Carlisle permission task is already running. Try again shortly.');
+  if (!lock.tryLock(15000)) throw new Error('Lock timeout.');
   try {
     const ss = SpreadsheetApp.getActive();
     const records = getAccessRecords_();
-    if (!records.length) throw new Error('No active staff found in SYSTEM_ACCESS.');
+    if (!records.length) throw new Error('No active staff found.');
 
-    const staffEmails = getActiveStaffEmails_(records);
+    const staffEmails = Array.from(new Set(records.map(r => r.email)));
     const ownerEmails = getOwnerEmails_();
 
     const currentEditors = ss.getEditors().map(e => e.getEmail().toLowerCase());
     const staffLower = staffEmails.map(e => e.toLowerCase());
+    const ownersLower = ownerEmails.map(o => o.toLowerCase());
 
-    // Add missing staff as spreadsheet editors
+    // Add missing staff
     const toAdd = staffEmails.filter(e => !currentEditors.includes(e.toLowerCase()));
     if (toAdd.length) ss.addEditors(toAdd);
 
-    // Remove inactive or deleted staff
-    const toRemove = currentEditors.filter(e => {
-      if (ownerEmails.map(o => o.toLowerCase()).includes(e)) return false;
-      if (staffLower.includes(e)) return false;
-      return true;
-    });
+    // Remove inactive/deleted staff (except owners)
+    const toRemove = currentEditors.filter(e => !staffLower.includes(e) && !ownersLower.includes(e));
     if (toRemove.length) {
-      toRemove.forEach(e => {
-        try { ss.removeEditor(e); } catch (err) {}
-      });
+      toRemove.forEach(e => { try { ss.removeEditor(e); } catch (err) {} });
     }
 
     log_('PERMISSION_SYNC', 'Synced ' + staffEmails.length + ' staff members. Added: ' + toAdd.length + ', Removed: ' + toRemove.length);
-    uiAlert_('Spreadsheet editors synced with SYSTEM_ACCESS.\nTotal staff: ' + staffEmails.length);
+    uiAlert_('Editors synced with SYSTEM_ACCESS.\nActive Staff: ' + staffEmails.length + '\nRemoved: ' + toRemove.length);
   } finally {
     lock.releaseLock();
   }
-}
-
-/**
- * Note: syncPermissionsForSheetNames_ is deprecated in the new architecture
- * because structural sheet protection should only have Owners as editors.
- * Cashiers edit through unblocked ranges.
- */
-function syncUserPermissions_ActiveSheetOnly() {
-  syncUserPermissions_All();
 }

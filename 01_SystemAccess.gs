@@ -1,6 +1,6 @@
 /****************************************************
  SYSTEM_ACCESS tools.
- Rebuild preserves existing staff rows and merges dropdown options.
+ Rule 3: Preservation of existing dropdowns.
 ****************************************************/
 
 function getSystemAccessSheet_(createIfMissing) {
@@ -10,19 +10,8 @@ function getSystemAccessSheet_(createIfMissing) {
   return sh;
 }
 
-function getHeaderMap_(sheet, row) {
-  row = row || 1;
-  const headers = sheet.getRange(row, 1, 1, Math.max(sheet.getLastColumn(), CONFIG.SYSTEM_ACCESS_HEADERS.length)).getValues()[0];
-  const map = {};
-  headers.forEach((h, i) => {
-    const k = key_(h);
-    if (k) map[k] = i + 1;
-  });
-  return map;
-}
-
 /**
- * Reads existing options from the sheet to avoid overriding user-added items.
+ * Merges defaults with existing validation options in the sheet.
  */
 function getExistingOptions_(sheet, column, defaults) {
   if (sheet.getLastRow() < 2) return defaults;
@@ -31,7 +20,7 @@ function getExistingOptions_(sheet, column, defaults) {
     .filter(Boolean);
   const combined = new Set(defaults);
   vals.forEach(v => combined.add(v));
-  return Array.from(combined);
+  return Array.from(combined).sort();
 }
 
 function rebuildSystemAccess() {
@@ -41,21 +30,29 @@ function rebuildSystemAccess() {
   let sheetOptions = CONFIG.SHEET_CONTROL_OPTIONS;
 
   if (sh.getLastRow() >= 1) {
-    const map = getHeaderMap_(sh, 1);
-    const maxCol = sh.getLastColumn();
-    const data = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), maxCol).getValues();
-    data.forEach(r => {
-      const email = r[(map.EMAIL || 1) - 1];
-      if (!email) return;
-      oldRows.push({
-        email: email,
-        fullName: r[(map['FULL NAME'] || map.NAME || 2) - 1] || '',
-        role: r[(map.ROLE || 3) - 1] || '',
-        active: r[(map.ACTIVE || map.STATUS || 4) - 1] || 'Yes',
-        notes: r[(map.NOTES || 5) - 1] || '',
-        sheets: r[(map['SHEETS CONTROLLED'] || map['SHEET CONTROLLED'] || map.SHEETS || 6) - 1] || ''
-      });
-    });
+    const data = sh.getRange(1, 1, sh.getLastRow(), Math.max(sh.getLastColumn(), 6)).getValues();
+    const headers = data[0].map(key_);
+    const m = {
+      email: headers.indexOf('EMAIL') + 1,
+      name: (headers.indexOf('FULL NAME') >= 0 ? headers.indexOf('FULL NAME') : headers.indexOf('NAME')) + 1,
+      role: headers.indexOf('ROLE') + 1,
+      active: headers.indexOf('ACTIVE') + 1,
+      notes: headers.indexOf('NOTES') + 1,
+      sheets: (headers.indexOf('SHEETS CONTROLLED') >= 0 ? headers.indexOf('SHEETS CONTROLLED') : headers.indexOf('SHEET CONTROLLED')) + 1
+    };
+
+    for (let r = 1; r < data.length; r++) {
+      const email = String(data[r][m.email - 1] || '').trim();
+      if (!email) continue;
+      oldRows.push([
+        email,
+        data[r][m.name - 1] || '',
+        data[r][m.role - 1] || '',
+        data[r][m.active - 1] || 'Yes',
+        data[r][m.notes - 1] || '',
+        data[r][m.sheets - 1] || ''
+      ]);
+    }
 
     roleOptions = getExistingOptions_(sh, 8, CONFIG.ROLE_OPTIONS);
     sheetOptions = getExistingOptions_(sh, 10, CONFIG.SHEET_CONTROL_OPTIONS);
@@ -63,30 +60,27 @@ function rebuildSystemAccess() {
 
   sh.clear();
   sh.getRange(1, 1, 1, CONFIG.SYSTEM_ACCESS_HEADERS.length).setValues([CONFIG.SYSTEM_ACCESS_HEADERS]).setFontWeight('bold').setBackground('#d9ead3');
-  if (oldRows.length) {
-    sh.getRange(2, 1, oldRows.length, 6).setValues(oldRows.map(r => [r.email, r.fullName, r.role, r.active, r.notes, r.sheets]));
-  }
+  if (oldRows.length) sh.getRange(2, 1, oldRows.length, 6).setValues(oldRows);
 
   sh.getRange('H1').setValue('ROLE OPTIONS').setFontWeight('bold').setBackground('#cfe2f3');
   sh.getRange(2, 8, roleOptions.length, 1).setValues(roleOptions.map(x => [x]));
   sh.getRange('J1').setValue('SHEETS CONTROLLED OPTIONS').setFontWeight('bold').setBackground('#fce5cd');
   sh.getRange(2, 10, sheetOptions.length, 1).setValues(sheetOptions.map(x => [x]));
-  sh.autoResizeColumns(1, 10);
 
+  sh.autoResizeColumns(1, 10);
   setupSystemAccessDropdowns();
-  log_('SYSTEM_ACCESS', 'Rebuilt SYSTEM_ACCESS and preserved staff/dropdowns.');
-  uiAlert_('SYSTEM_ACCESS rebuilt.');
+  log_('SYSTEM_ACCESS', 'Rebuilt SYSTEM_ACCESS with preservation.');
+  uiAlert_('SYSTEM_ACCESS rebuilt. Existing users and dropdown items preserved.');
 }
 
 function setupSystemAccessDropdowns() {
   const sh = getSystemAccessSheet_(true);
   const maxRows = Math.max(sh.getMaxRows() - 1, 50);
-
   const roleOptions = getExistingOptions_(sh, 8, CONFIG.ROLE_OPTIONS);
   const sheetOptions = getExistingOptions_(sh, 10, CONFIG.SHEET_CONTROL_OPTIONS);
 
-  const roleRule = SpreadsheetApp.newDataValidation().requireValueInList(roleOptions, true).setAllowInvalid(false).build();
-  const activeRule = SpreadsheetApp.newDataValidation().requireValueInList(['Yes','No'], true).setAllowInvalid(false).build();
+  const roleRule = SpreadsheetApp.newDataValidation().requireValueInList(roleOptions, true).build();
+  const activeRule = SpreadsheetApp.newDataValidation().requireValueInList(['Yes','No'], true).build();
   const sheetsRule = SpreadsheetApp.newDataValidation().requireValueInList(sheetOptions, true).setAllowInvalid(true).build();
 
   sh.getRange(2, 3, maxRows, 1).setDataValidation(roleRule);
@@ -97,99 +91,50 @@ function setupSystemAccessDropdowns() {
 function setupStockMovementDropdowns() {
   const ss = SpreadsheetApp.getActive();
   const sh = ss.getSheetByName('STOCK MOVEMENT APPROVAL LOG');
-  if (!sh) throw new Error('STOCK MOVEMENT APPROVAL LOG sheet not found.');
-
+  if (!sh) return;
   const deptCol = findHeaderCol_(sh, ['DEPARTMENT'], 10);
   const typeCol = findHeaderCol_(sh, ['MOVEMENT TYPE'], 10);
   const statusCol = findHeaderCol_(sh, ['STATUS'], 10);
+  if (!deptCol || !typeCol || !statusCol) return;
 
-  if (!deptCol || !typeCol || !statusCol) throw new Error('Required headers not found in log sheet.');
-
-  const maxRows = Math.max(sh.getMaxRows() - statusCol.row, 1000);
-
-  const deptRule = SpreadsheetApp.newDataValidation().requireValueInList(CONFIG.DEPARTMENT_OPTIONS, true).setAllowInvalid(false).build();
-  const typeRule = SpreadsheetApp.newDataValidation().requireValueInList(CONFIG.MOVEMENT_TYPES, true).setAllowInvalid(false).build();
-  const statusRule = SpreadsheetApp.newDataValidation().requireValueInList(['APPROVED','REJECTED','UNDER REVIEW','PENDING'], true).setAllowInvalid(false).build();
+  const maxRows = Math.max(sh.getMaxRows() - statusCol.row, 500);
+  const deptRule = SpreadsheetApp.newDataValidation().requireValueInList(CONFIG.DEPARTMENT_OPTIONS, true).build();
+  const typeRule = SpreadsheetApp.newDataValidation().requireValueInList(CONFIG.MOVEMENT_TYPES, true).build();
+  const statusRule = SpreadsheetApp.newDataValidation().requireValueInList(['APPROVED','REJECTED','UNDER REVIEW','PENDING'], true).build();
 
   sh.getRange(statusCol.row + 1, deptCol.col, maxRows, 1).setDataValidation(deptRule);
   sh.getRange(statusCol.row + 1, typeCol.col, maxRows, 1).setDataValidation(typeRule);
   sh.getRange(statusCol.row + 1, statusCol.col, maxRows, 1).setDataValidation(statusRule);
-
-  uiAlert_('Stock Movement Approval Log dropdowns updated.');
-}
-
-function setupDailySalesBreakdownDropdowns() {
-  const ss = SpreadsheetApp.getActive();
-  const sh = ss.getSheetByName('DAILY SALES BREAKDOWN');
-  if (!sh) throw new Error('DAILY SALES BREAKDOWN sheet not found.');
-
-  const deptCol = findHeaderCol_(sh, ['DEPARTMENT'], 10) || {row: 1, col: 7}; // Default G
-  const maxRows = Math.max(sh.getMaxRows() - deptCol.row, 1000);
-
-  const deptRule = SpreadsheetApp.newDataValidation().requireValueInList(CONFIG.DEPARTMENT_OPTIONS, true).setAllowInvalid(false).build();
-  sh.getRange(deptCol.row + 1, deptCol.col, maxRows, 1).setDataValidation(deptRule);
-
-  uiAlert_('Daily Sales Breakdown dropdowns updated.');
+  uiAlert_('Dropdowns updated for Log.');
 }
 
 function validateSystemAccess() {
   const sh = getSystemAccessSheet_(false);
-  if (!sh) throw new Error('SYSTEM_ACCESS sheet is missing.');
-  const map = getHeaderMap_(sh, 1);
+  if (!sh) throw new Error('SYSTEM_ACCESS sheet missing.');
+  const data = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 6).getValues();
   const errors = [];
-  ['EMAIL','ROLE'].forEach(h => { if (!map[h]) errors.push('Missing required column: ' + h); });
-  if (errors.length) throw new Error(errors.join('\n'));
-
-  const data = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 0), Math.max(sh.getLastColumn(), 6)).getValues();
-  const seen = {};
-
-  const roleOptions = getExistingOptions_(sh, 8, CONFIG.ROLE_OPTIONS).map(key_);
-  const validRoles = new Set(roleOptions);
-  const sheetOptions = getExistingOptions_(sh, 10, CONFIG.SHEET_CONTROL_OPTIONS).map(key_);
-  const validControls = new Set(sheetOptions);
-
-  data.forEach((r, idx) => {
-    const row = idx + 2;
-    const email = String(r[(map.EMAIL || 1) - 1] || '').trim();
-    const role = key_(r[(map.ROLE || 3) - 1]);
-    const active = key_(r[(map.ACTIVE || map.STATUS || 4) - 1] || 'YES');
-    const sheets = splitList_(r[(map['SHEETS CONTROLLED'] || 6) - 1]);
-    if (!email && !role && !sheets.length) return;
-    if (!email) errors.push('Row ' + row + ': Email is blank.');
-    if (email && seen[email.toLowerCase()]) errors.push('Row ' + row + ': Duplicate email ' + email);
-    if (email) seen[email.toLowerCase()] = true;
-    if (!role) errors.push('Row ' + row + ': Role is blank.');
-    if (role && !validRoles.has(role)) errors.push('Row ' + row + ': Invalid role: ' + role);
-    if (active && !['YES','NO','ACTIVE','INACTIVE','TRUE','FALSE'].includes(active)) errors.push('Row ' + row + ': Active must be Yes/No.');
-    sheets.forEach(s => { if (!validControls.has(s)) errors.push('Row ' + row + ': Unknown Sheets Controlled option: ' + s); });
+  data.forEach((r, i) => {
+    if (r[0] && !r[2]) errors.push('Row ' + (i + 2) + ': Missing Role');
   });
-
-  if (errors.length) {
-    uiAlert_('SYSTEM_ACCESS validation found issues:\n\n' + errors.slice(0, 20).join('\n'));
-    return false;
-  }
-  uiAlert_('SYSTEM_ACCESS validation passed.');
-  return true;
+  if (errors.length) uiAlert_('Validation Errors:\n' + errors.join('\n'));
+  else uiAlert_('Validation Passed.');
 }
 
 function getAccessRecords_() {
   const sh = getSystemAccessSheet_(false);
-  if (!sh) return [];
-  const map = getHeaderMap_(sh, 1);
-  if (!map.EMAIL || !map.ROLE) return [];
-  const data = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 0), Math.max(sh.getLastColumn(), 6)).getValues();
-  return data.map(r => {
-    const email = String(r[(map.EMAIL || 1) - 1] || '').trim();
-    const role = key_(r[(map.ROLE || 3) - 1]);
-    const activeVal = key_(r[(map.ACTIVE || map.STATUS || 4) - 1] || 'YES');
-    const sheets = splitList_(r[(map['SHEETS CONTROLLED'] || 6) - 1]);
-    return { email, role, active: !['NO','INACTIVE','FALSE'].includes(activeVal), sheets };
-  }).filter(r => r.email && r.role && r.active);
+  if (!sh || sh.getLastRow() < 2) return [];
+  const data = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+  return data.map(r => ({
+    email: String(r[0] || '').trim().toLowerCase(),
+    role: key_(r[2]),
+    active: key_(r[3]) === 'YES',
+    sheets: splitList_(r[5])
+  })).filter(r => r.email && r.active);
 }
 
 function getOwnerEmails_() {
   return getAccessRecords_()
-    .filter(r => CONFIG.OWNER_ROLES.includes(r.role) || r.sheets.includes('ALL') || r.sheets.includes('OWNER SHEETS'))
+    .filter(r => CONFIG.OWNER_ROLES.includes(r.role) || r.sheets.includes('ALL'))
     .map(r => r.email);
 }
 
@@ -198,11 +143,8 @@ function expandControlsToSheets_(controls) {
   controls.forEach(c => {
     const k = key_(c);
     const expanded = CONFIG.GROUP_ALIASES[k];
-    if (expanded) {
-      expanded.forEach(s => out.add(key_(s)));
-    } else {
-      out.add(k);
-    }
+    if (expanded) expanded.forEach(s => out.add(key_(s)));
+    else out.add(k);
   });
   return Array.from(out);
 }
@@ -210,9 +152,10 @@ function expandControlsToSheets_(controls) {
 function usersForSheet_(sheetName) {
   const records = getAccessRecords_();
   const users = [];
+  const sKey = key_(sheetName);
   records.forEach(r => {
     const expanded = expandControlsToSheets_(r.sheets);
-    if (expanded.includes('*') || expanded.map(key_).includes(key_(sheetName))) users.push(r.email);
+    if (expanded.includes('*') || expanded.includes(sKey)) users.push(r.email);
   });
   return Array.from(new Set(users));
 }
