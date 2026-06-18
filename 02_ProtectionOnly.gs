@@ -107,18 +107,6 @@ function addRange_(arr, range) {
   pruned.forEach(r => arr.push(r));
 }
 
-function lastMeaningfulRow_(sheet, startRow, keyCol) {
-  const max = sheet.getMaxRows();
-  if (max < startRow) return startRow - 1;
-  const numRows = max - startRow + 1;
-  const vals = sheet.getRange(startRow, keyCol, numRows, 1).getDisplayValues();
-  let last = startRow - 1;
-  for (let i = vals.length - 1; i >= 0; i--) {
-    if (String(vals[i][0] || '').trim() !== '') { last = startRow + i; break; }
-  }
-  return Math.max(last, startRow);
-}
-
 function isCSSheet_(name) {
   const n = key_(name);
   return n.startsWith('CS ');
@@ -139,76 +127,72 @@ function editableRangesForSheet_(sheet) {
   // Core Transaction Sheets
   if (name === 'PURCHASES') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
-    const lastRow = lastMeaningfulRow_(sheet, 5, 1); // Column A
-    const nr = lastRow - 4;
-    if (nr > 0) {
-      addRange_(ranges, safeRangeRC_(sheet, 5, 1, nr, 3)); // A5:C
-      addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 5)); // E5:I
-      addRange_(ranges, safeRangeRC_(sheet, 5, 11, nr, 1)); // K5:K
-    }
+    addRange_(ranges, safeRangeA1_(sheet, 'A:C'));
+    addRange_(ranges, safeRangeA1_(sheet, 'E:I'));
+    addRange_(ranges, safeRangeA1_(sheet, 'K:K'));
   } else if (name === 'EXPENSES') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
-    const lastRow = Math.min(lastMeaningfulRow_(sheet, 5, 1), 502);
-    const nr = lastRow - 4;
-    if (nr > 0) {
-      addRange_(ranges, safeRangeRC_(sheet, 5, 1, nr, 9)); // A5:I502
-      addRange_(ranges, safeRangeRC_(sheet, 5, 11, nr, 1)); // K5:K502
-    }
+    addRange_(ranges, safeRangeA1_(sheet, 'A5:I502'));
+    addRange_(ranges, safeRangeA1_(sheet, 'K5:K502'));
   } else if (name === 'STOCK MOVEMENT APPROVAL LOG') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
-    const lastRow = lastMeaningfulRow_(sheet, 7, 1); // Column A
-    const nr = lastRow - 6;
-    if (nr > 0) {
-      addRange_(ranges, safeRangeRC_(sheet, 7, 1, nr, 3)); // A7:C
-      addRange_(ranges, safeRangeRC_(sheet, 7, 5, nr, 5)); // E7:I
-    }
+    addRange_(ranges, safeRangeA1_(sheet, 'A7:C1004'));
+    addRange_(ranges, safeRangeA1_(sheet, 'E7:I1004'));
   } else if (name === 'DAILY SALES') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
     addRange_(ranges, safeRangeA1_(sheet, 'O5:O35'));
   } else if (name === 'DAILY SALES BREAKDOWN') {
-    addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
-    const lastRow = lastMeaningfulRow_(sheet, 5, 1); // Column A
-    const nr = lastRow - 4;
-    if (nr > 0) {
-      addRange_(ranges, safeRangeRC_(sheet, 5, 1, nr, 8));   // A5:H (Editable) - I is Restricted
-      addRange_(ranges, safeRangeRC_(sheet, 5, 10, nr, 3));  // J5:L (Editable) - M is Restricted
-      addRange_(ranges, safeRangeRC_(sheet, 5, 14, nr, 1));  // N5:N (Editable) - O is Restricted
-      addRange_(ranges, safeRangeRC_(sheet, 5, 16, nr, 4));  // P5:S (Editable)
-    }
+    addRange_(ranges, safeRangeA1_(sheet, 'A5:H1004'));
+    addRange_(ranges, safeRangeA1_(sheet, 'J5:L1004'));
+    addRange_(ranges, safeRangeA1_(sheet, 'N:N'));
+    addRange_(ranges, safeRangeA1_(sheet, 'P:S'));
 
   // CS Sheets
-  } else if (isCSSheet_(name)) {
+  } else if (name === 'CS STORE') {
     addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
-    const lastRow = lastMeaningfulRow_(sheet, 5, 2); // Use Column B (Name) to find last row
-    const numRows = lastRow - 4;
-    if (numRows > 0) {
-      addRange_(ranges, safeRangeRC_(sheet, 5, 5, numRows, 2));  // E5:F (Opening Stock)
-      addRange_(ranges, safeRangeRC_(sheet, 5, 31, numRows, 1)); // AE5:AE (Physical Count)
-    }
+    addRange_(ranges, safeRangeA1_(sheet, 'E5:F311'));
+    addRange_(ranges, safeRangeA1_(sheet, 'O5:O311'));
+    addRange_(ranges, safeRangeA1_(sheet, 'AE5:AE311'));
+  } else if (name === 'CS MINI-MART') {
+    addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
+    addRange_(ranges, safeRangeA1_(sheet, 'E5:F100'));
+    addRange_(ranges, safeRangeA1_(sheet, 'O5:O100'));
+    addRange_(ranges, safeRangeA1_(sheet, 'AE5:AE100'));
+  } else if (name === 'CS RESTAURANT') {
+    addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
+    addRange_(ranges, safeRangeA1_(sheet, 'E5:F94'));
+    addRange_(ranges, safeRangeA1_(sheet, 'O5:O94'));
+    addRange_(ranges, safeRangeA1_(sheet, 'AE5:AE94'));
+  } else if (name === 'CS LAUNDRY') {
+    addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
+    addRange_(ranges, safeRangeA1_(sheet, 'E5:F50'));
+    addRange_(ranges, safeRangeA1_(sheet, 'AE5:AE50'));
+  } else if (name === 'CS BAR') {
+    addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
+    addRange_(ranges, safeRangeA1_(sheet, 'E5:F74'));
+    addRange_(ranges, safeRangeA1_(sheet, 'O5:O74'));
+    addRange_(ranges, safeRangeA1_(sheet, 'AE5:AE74'));
+  } else if (name === 'CS KITCHEN') {
+    addRange_(ranges, safeRangeA1_(sheet, 'E2:F3'));
+    addRange_(ranges, safeRangeA1_(sheet, 'E5:F50'));
+    addRange_(ranges, safeRangeA1_(sheet, 'O5:O50'));
+    addRange_(ranges, safeRangeA1_(sheet, 'AE5:AE50'));
 
   // Weekly M.R Sheets
   } else if (isWeeklyMRSheet_(name)) {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:B3'));
     ['D2:H2','J2:N2','P2:T2','V2:Z2','AB2:AF2','AH2:AL2','AN2:AR2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
-
-    const lastRow = lastMeaningfulRow_(sheet, 8, 2); // Column B
-    const numRows = lastRow - 7;
-    if (numRows > 0) {
-      // Sales columns: F, L, R, X, AD, AJ, AP (cols 6, 12, 18, 24, 30, 36, 42)
-      [6, 12, 18, 24, 30, 36, 42].forEach(col => addRange_(ranges, safeRangeRC_(sheet, 8, col, numRows, 1)));
-      // Opening Stock (Week 1 only): D8:D
-      if (isWeekOneSheet_(name)) {
-        addRange_(ranges, safeRangeRC_(sheet, 8, 4, numRows, 1));
-      }
+    if (isWeekOneSheet_(name)) {
+      if (name.includes('KITCHEN')) addRange_(ranges, safeRangeA1_(sheet, 'D8:D106'));
+      else if (name.includes('BUSH BAR')) addRange_(ranges, safeRangeA1_(sheet, 'D8:D102'));
+      else if (name.includes('MINI-MART')) addRange_(ranges, safeRangeA1_(sheet, 'D8:D145'));
     }
 
   // M.R KITCHEN U
   } else if (name === 'M.R KITCHEN U') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:B3'));
     ['D2:F2','J2:L2','P2:R2','V2:X2'].forEach(a1 => addRange_(ranges, safeRangeA1_(sheet, a1)));
-    const lastRow = lastMeaningfulRow_(sheet, 8, 1); // Column A
-    const numRows = lastRow - 7;
-    if (numRows > 0) addRange_(ranges, safeRangeRC_(sheet, 8, 4, numRows, 2)); // D8:E (Opening Stock)
+    addRange_(ranges, safeRangeA1_(sheet, 'D8:D70'));
   }
 
   return ranges;
