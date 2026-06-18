@@ -107,6 +107,18 @@ function addRange_(arr, range) {
   pruned.forEach(r => arr.push(r));
 }
 
+function lastMeaningfulRow_(sheet, startRow, keyCol) {
+  const max = sheet.getMaxRows();
+  if (max < startRow) return startRow - 1;
+  const numRows = max - startRow + 1;
+  const vals = sheet.getRange(startRow, keyCol, numRows, 1).getDisplayValues();
+  let last = startRow - 1;
+  for (let i = vals.length - 1; i >= 0; i--) {
+    if (String(vals[i][0] || '').trim() !== '') { last = startRow + i; break; }
+  }
+  return Math.max(last, startRow);
+}
+
 function isCSSheet_(name) {
   const n = key_(name);
   return n.startsWith('CS ');
@@ -127,25 +139,42 @@ function editableRangesForSheet_(sheet) {
   // Core Transaction Sheets
   if (name === 'PURCHASES') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
-    addRange_(ranges, safeRangeA1_(sheet, 'A:C'));
-    addRange_(ranges, safeRangeA1_(sheet, 'E:I'));
-    addRange_(ranges, safeRangeA1_(sheet, 'K:K'));
+    const lastRow = Math.min(lastMeaningfulRow_(sheet, 5, 1), 1004);
+    const nr = lastRow - 4;
+    if (nr > 0) {
+      addRange_(ranges, safeRangeRC_(sheet, 5, 1, nr, 3)); // A5:C
+      addRange_(ranges, safeRangeRC_(sheet, 5, 5, nr, 5)); // E5:I
+      addRange_(ranges, safeRangeRC_(sheet, 5, 11, nr, 1)); // K5:K
+    }
   } else if (name === 'EXPENSES') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
-    addRange_(ranges, safeRangeA1_(sheet, 'A5:I502'));
-    addRange_(ranges, safeRangeA1_(sheet, 'K5:K502'));
+    const lastRow = Math.min(lastMeaningfulRow_(sheet, 5, 1), 502);
+    const nr = lastRow - 4;
+    if (nr > 0) {
+      addRange_(ranges, safeRangeRC_(sheet, 5, 1, nr, 9)); // A5:I502
+      addRange_(ranges, safeRangeRC_(sheet, 5, 11, nr, 1)); // K5:K502
+    }
   } else if (name === 'STOCK MOVEMENT APPROVAL LOG') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
-    addRange_(ranges, safeRangeA1_(sheet, 'A7:C1004'));
-    addRange_(ranges, safeRangeA1_(sheet, 'E7:I1004'));
+    const lastRow = Math.min(lastMeaningfulRow_(sheet, 7, 1), 1004);
+    const nr = lastRow - 6;
+    if (nr > 0) {
+      addRange_(ranges, safeRangeRC_(sheet, 7, 1, nr, 3)); // A7:C
+      addRange_(ranges, safeRangeRC_(sheet, 7, 5, nr, 5)); // E7:I
+    }
   } else if (name === 'DAILY SALES') {
     addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
     addRange_(ranges, safeRangeA1_(sheet, 'O5:O35'));
   } else if (name === 'DAILY SALES BREAKDOWN') {
-    addRange_(ranges, safeRangeA1_(sheet, 'A5:H1004'));
-    addRange_(ranges, safeRangeA1_(sheet, 'J5:L1004'));
-    addRange_(ranges, safeRangeA1_(sheet, 'N:N'));
-    addRange_(ranges, safeRangeA1_(sheet, 'P:S'));
+    addRange_(ranges, safeRangeA1_(sheet, 'A3:C3'));
+    const lastRow = lastMeaningfulRow_(sheet, 5, 1);
+    const nr = lastRow - 4;
+    if (nr > 0) {
+      addRange_(ranges, safeRangeRC_(sheet, 5, 1, nr, 8));   // A5:H
+      addRange_(ranges, safeRangeRC_(sheet, 5, 10, nr, 3));  // J5:L
+      addRange_(ranges, safeRangeRC_(sheet, 5, 14, nr, 1));  // N
+      addRange_(ranges, safeRangeRC_(sheet, 5, 16, nr, 4));  // P:S
+    }
 
   // CS Sheets
   } else if (name === 'CS STORE') {

@@ -31,10 +31,19 @@ function syncUserPermissions_All() {
     const toAdd = staffEmails.filter(e => !currentEditors.includes(e.toLowerCase()));
     if (toAdd.length) ss.addEditors(toAdd);
 
-    // Logic: We don't remove editors here because they might have been added manually.
-    // However, if we want strict control, we would remove anyone not in staffLower or ownerEmails.
+    // Remove inactive or deleted staff
+    const toRemove = currentEditors.filter(e => {
+      if (ownerEmails.map(o => o.toLowerCase()).includes(e)) return false;
+      if (staffLower.includes(e)) return false;
+      return true;
+    });
+    if (toRemove.length) {
+      toRemove.forEach(e => {
+        try { ss.removeEditor(e); } catch (err) {}
+      });
+    }
 
-    log_('PERMISSION_SYNC', 'Synced ' + staffEmails.length + ' staff members to spreadsheet editors.');
+    log_('PERMISSION_SYNC', 'Synced ' + staffEmails.length + ' staff members. Added: ' + toAdd.length + ', Removed: ' + toRemove.length);
     uiAlert_('Spreadsheet editors synced with SYSTEM_ACCESS.\nTotal staff: ' + staffEmails.length);
   } finally {
     lock.releaseLock();
